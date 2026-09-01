@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="system">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>良乡 ⇄ 中关村 · 校园班车</title>
+  <meta name="description" content="北京理工大学良乡 ⇄ 中关村（含回龙观 → 良乡）工作日校园班车时刻表 — 实时运行进度与即将开行班次">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">跳转到主内容</a>
+
+  <header class="site-header">
+    <div class="hero">
+      <p class="eyebrow">BIT · Campus Shuttle · 工作日</p>
+      <div class="hero__row">
+        <h1>良乡 ⇄ 中关村 校园班车</h1>
+        <time id="liveClock" class="live-clock" datetime="">--:--:--</time>
+      </div>
+      <p class="hero__desc">根据工作日时刻表实时推算：顶部显示<b>正在运行</b>的班次（中关村-良乡双向共享一条进度条），下方列出<b>即将开行</b>的班次。</p>
+    </div>
+  </header>
+
+  <main class="app-shell" id="main-content">
+    <section class="toolbar" aria-label="工具栏">
+      <div class="toolbar__status" id="nextStatus" role="status" aria-live="polite">加载中…</div>
+      <label for="themeSelect" class="theme-label">
+        <span>主题</span>
+        <select id="themeSelect">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="panel" aria-labelledby="runningTitle">
+      <h2 class="panel__title" id="runningTitle">正在运行</h2>
+      <p class="panel__hint" id="runningHint"></p>
+
+      <div class="route-track" id="trackMain">
+        <div class="route-track__labels">
+          <span class="route-track__end route-track__end--left">良乡</span>
+          <span class="route-track__end route-track__end--right">中关村</span>
+        </div>
+        <div class="route-track__line" id="trackMainLine" aria-hidden="true"></div>
+        <p class="route-track__empty" id="trackMainEmpty">当前没有班车在运行</p>
+      </div>
+
+      <div class="route-track route-track--secondary" id="trackSecondary" hidden>
+        <div class="route-track__labels">
+          <span class="route-track__end route-track__end--left">回龙观</span>
+          <span class="route-track__end route-track__end--right">良乡</span>
+        </div>
+        <div class="route-track__line" id="trackSecondaryLine" aria-hidden="true"></div>
+      </div>
+
+      <ul class="running-list" id="runningList" aria-label="运行中的班次明细"></ul>
+    </section>
+
+    <section class="panel" aria-labelledby="upcomingTitle">
+      <h2 class="panel__title" id="upcomingTitle">即将开行</h2>
+      <div class="filter-chips" id="routeChips" role="group" aria-label="按方向筛选">
+        <button class="filter-chip filter-chip--active" data-route="all" aria-pressed="true" type="button">全部</button>
+        <button class="filter-chip" data-route="a" aria-pressed="false" type="button">良乡 → 中关村</button>
+        <button class="filter-chip" data-route="c" aria-pressed="false" type="button">中关村 → 良乡</button>
+        <button class="filter-chip" data-route="b" aria-pressed="false" type="button">回龙观 → 良乡</button>
+        <button class="filter-chip filter-chip--rainbow" data-route="rainbow" aria-pressed="false" type="button">🌈 仅彩虹班车</button>
+      </div>
+      <p id="resultsStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+      <ul class="trip-list" id="tripList" aria-label="即将开行的班次"></ul>
+      <div class="empty-state" id="upcomingEmpty" hidden>
+        <h3>今天没有更多班次了</h3>
+        <p>今日班次均已开行，请明天再来查看。</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>数据：工作日时刻表 · 纯静态页面 · 浏览器本地实时推算（运行耗时当前按 1 小时估算，待更新）</p>
+    <p>彩虹班车标记 🌈 · 票价 10 元班次以 ¥10.00 显示</p>
+  </footer>
+
+  <noscript>
+    <div style="text-align:center;padding:2rem">
+      <p>请启用 JavaScript 以查看实时班车进度。</p>
+    </div>
+  </noscript>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

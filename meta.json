@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "site": "campus-shuttle-board",
+  "siteName": "良乡 ⇄ 中关村 · 校园班车",
+  "version": "2026.09.01",
+  "generatedAt": "2026-09-01T00:00:00.000Z",
+  "updated": "2026-09-01",
+  "deepLink": {
+    "base": "https://campus-shuttle-board.pages.dev/",
+    "formats": {
+      "search": "https://campus-shuttle-board.pages.dev/"
+    }
+  },
+  "searchEntry": "https://campus-shuttle-board.pages.dev/",
+  "counts": {
+    "routes": 3,
+    "trips": 47,
+    "durationMin": 60
+  },
+  "notes": "工作日校园班车时刻表 · 纯静态实时推算（浏览器本地计算，运行耗时暂按 1 小时估算，待提供实际耗时后更新 schedule-data.js）"
+}
