@@ -1,23 +1,29 @@
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE } from "./schedule-data.js";
+import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js";
 import {
   formatClock,
   formatHM,
   formatDurationLabel,
-  computeAll
+  computeAll,
+  ticketInfo
 } from "./lib/schedule.js";
+import { now, syncClock, getSyncState } from "./lib/time.js";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
+const ROUTE_DEST = { a: "中关村", c: "良乡" };
 
 const dom = {
   clock: document.getElementById("liveClock"),
+  syncBadge: document.getElementById("syncBadge"),
   nextStatus: document.getElementById("nextStatus"),
   resultsStatus: document.getElementById("resultsStatus"),
   themeSelect: document.getElementById("themeSelect"),
   routeChips: document.getElementById("routeChips"),
-  trackMainLine: document.getElementById("trackMainLine"),
+  trackMain: document.getElementById("trackMain"),
+  laneA: document.getElementById("laneA"),
+  laneC: document.getElementById("laneC"),
   trackMainEmpty: document.getElementById("trackMainEmpty"),
-  trackSecondary: document.getElementById("trackSecondary"),
-  trackSecondaryLine: document.getElementById("trackSecondaryLine"),
+  runningDetail: document.getElementById("runningDetail"),
+  detailToggle: document.getElementById("detailToggle"),
   runningList: document.getElementById("runningList"),
   runningHint: document.getElementById("runningHint"),
   tripList: document.getElementById("tripList"),
@@ -27,6 +33,7 @@ const dom = {
 const state = {
   theme: localStorage.getItem("shuttle-theme") || "system",
   routeFilter: "all",
+  showAll: false,
   runningSig: "",
   upcomingSig: ""
 };
@@ -59,77 +66,107 @@ function bindTheme() {
   });
 }
 
-/* ===== Running track (bidirectional shared) ===== */
-function makeBusElement(trip, now) {
+/* ===== Clock sync badge ===== */
+function renderSyncBadge() {
+  const s = getSyncState();
+  if (!s.synced) {
+    dom.syncBadge.hidden = false;
+    dom.syncBadge.textContent = "使用本机时间";
+    dom.syncBadge.className = "sync-badge sync-badge--err";
+    dom.syncBadge.title = "未能同步网络时间，使用本机时钟";
+    return;
+  }
+  dom.syncBadge.hidden = false;
+  const src = s.source === "akamai" ? "Akamai CDN" : "TimeAPI";
+  dom.syncBadge.textContent = "网络时间已同步";
+  dom.syncBadge.className = "sync-badge sync-badge--ok";
+  dom.syncBadge.title = `同步源：${src} · 偏差 ${Math.round(s.offsetMs / 1000)}s · ${new Date(s.lastSync).toLocaleTimeString("zh-CN")}`;
+}
+
+async function initClockSync() {
+  await syncClock();
+  renderSyncBadge();
+  setInterval(async () => {
+    await syncClock();
+    renderSyncBadge();
+  }, 15 * 60 * 1000);
+}
+
+/* ===== Running track: two lanes (a: 良乡→中关村 left→right, c: 中关村→良乡 right→left) ===== */
+function makeBusMarker(trip, now) {
+  const lane = trip.route === "a" ? dom.laneA : dom.laneC;
   const el = document.createElement("div");
-  el.className = `route-track__bus ${trip.route === "c" ? "route-track__bus--c" : ""}`;
+  el.className = "bus-marker";
   el.dataset.id = trip.id;
   el.innerHTML = `
-    <span class="route-track__bus-time">${escapeHtml(trip.dep)}${trip.route === "c" ? " ←" : " →"}</span>
-    <span class="route-track__bus-dot" aria-hidden="true"></span>
+    <span class="bus-marker__tip" aria-hidden="true"></span>
+    <span class="bus-marker__pill">
+      <span class="bus-marker__emoji" aria-hidden="true">🚌</span>
+      <span class="bus-marker__time" data-role="time">${escapeHtml(trip.dep)}</span>
+    </span>
+    <span class="bus-marker__tooltip" data-role="tooltip"></span>
   `;
-  updateBusPosition(el, trip, now);
+  updateBusMarker(el, trip, now);
+  lane.appendChild(el);
   return el;
 }
 
-function updateBusPosition(el, trip, now) {
+function updateBusMarker(el, trip, now) {
   const p = trip.progress * 100;
-  let left;
-  if (trip.route === "c") {
-    left = 100 - p;
-  } else if (trip.route === "a") {
-    left = p;
-  } else {
-    left = p;
-  }
+  const left = trip.route === "a" ? p : 100 - p;
   el.style.left = `${left}%`;
+  const remaining = trip.arrMs - now;
+  const dest = ROUTE_DEST[trip.route];
+  const tip = el.querySelector('[data-role="tooltip"]');
+  tip.textContent = `往${dest} · 剩余 ${formatDurationLabel(remaining)}`;
+  const time = el.querySelector('[data-role="time"]');
+  time.textContent = trip.dep;
 }
 
-function renderMainTrack(all, now) {
-  const running = all.filter((t) => t.status === "running" && (t.route === "a" || t.route === "c"));
-  const current = [...dom.trackMainLine.querySelectorAll(".route-track__bus")];
-  const currentIds = new Set(current.map((el) => el.dataset.id));
-  const wantIds = new Set(running.map((t) => t.id));
+function renderTrack(all, now) {
+  const running = all.filter((t) => t.status === "running");
+  const aRunning = running.filter((t) => t.route === "a");
+  const cRunning = running.filter((t) => t.route === "c");
 
-  for (const el of current) {
-    if (!wantIds.has(el.dataset.id)) el.remove();
-  }
-  for (const trip of running) {
-    if (!currentIds.has(trip.id)) {
-      dom.trackMainLine.appendChild(makeBusElement(trip, now));
-    } else {
-      const el = dom.trackMainLine.querySelector(`.route-track__bus[data-id="${trip.id}"]`);
-      updateBusPosition(el, trip, now);
+  for (const [lane, trips] of [[dom.laneA, aRunning], [dom.laneC, cRunning]]) {
+    const current = [...lane.querySelectorAll(".bus-marker")];
+    const currentIds = new Set(current.map((el) => el.dataset.id));
+    const wantIds = new Set(trips.map((t) => t.id));
+    for (const el of current) {
+      if (!wantIds.has(el.dataset.id)) el.remove();
+    }
+    for (const trip of trips) {
+      if (!currentIds.has(trip.id)) {
+        makeBusMarker(trip, now);
+      } else {
+        const el = lane.querySelector(`.bus-marker[data-id="${trip.id}"]`);
+        updateBusMarker(el, trip, now);
+      }
     }
   }
   dom.trackMainEmpty.hidden = running.length > 0;
+  dom.laneA.hidden = aRunning.length === 0;
+  dom.laneC.hidden = cRunning.length === 0;
 }
 
-function renderSecondaryTrack(all, now) {
-  const running = all.filter((t) => t.status === "running" && t.route === "b");
-  dom.trackSecondary.hidden = running.length === 0;
-  if (running.length === 0) return;
-  const current = [...dom.trackSecondaryLine.querySelectorAll(".route-track__bus")];
-  const currentIds = new Set(current.map((el) => el.dataset.id));
-  for (const el of current) {
-    if (!running.some((t) => t.id === el.dataset.id)) el.remove();
-  }
-  for (const trip of running) {
-    if (!currentIds.has(trip.id)) {
-      dom.trackSecondaryLine.appendChild(makeBusElement(trip, now));
-    } else {
-      const el = dom.trackSecondaryLine.querySelector(`.route-track__bus[data-id="${trip.id}"]`);
-      updateBusPosition(el, trip, now);
-    }
-  }
+/* ===== Detail toggle: force show-all + expand per-trip list ===== */
+function bindDetailToggle() {
+  dom.detailToggle.addEventListener("click", () => {
+    state.showAll = !state.showAll;
+    dom.trackMain.classList.toggle("show-all", state.showAll);
+    dom.runningDetail.hidden = !state.showAll;
+    dom.detailToggle.setAttribute("aria-expanded", String(state.showAll));
+    dom.detailToggle.textContent = state.showAll ? "隐藏全部开行详情" : "显示全部开行详情";
+  });
 }
 
 /* ===== Running detail list ===== */
-function runningItemHtml(trip) {
+function runningItemHtml(trip, now) {
   const rainbowTag = trip.rainbow ? '<span class="tag">🌈 彩虹班车</span>' : "";
-  const elapsed = Date.now() - trip.depMs;
-  const remaining = trip.arrMs - Date.now();
+  const elapsed = now - trip.depMs;
+  const remaining = trip.arrMs - now;
   const pct = Math.round(trip.progress * 100);
+  const fillCls = trip.rainbow ? "running-item__fill--rainbow" : `running-item__fill--${trip.route}`;
   return `
     <li class="running-item" data-id="${trip.id}">
       <div class="running-item__head">
@@ -139,7 +176,7 @@ function runningItemHtml(trip) {
         <span class="running-item__meta"><span data-role="pct">${pct}%</span> · 已行 ${escapeHtml(formatDurationLabel(elapsed))}</span>
       </div>
       <div class="running-item__bar" aria-hidden="true">
-        <div class="running-item__fill ${trip.rainbow ? "running-item__fill--rainbow" : ""}" data-role="fill" style="width:${pct}%"></div>
+        <div class="running-item__fill ${fillCls}" data-role="fill" style="width:${pct}%"></div>
       </div>
       <div class="running-item__foot">
         <span>预计到达 <b>${escapeHtml(formatHM(new Date(trip.arrMs)))}</b></span>
@@ -149,7 +186,7 @@ function runningItemHtml(trip) {
   `;
 }
 
-function renderRunningList(all) {
+function renderRunningList(all, now) {
   const running = all.filter((t) => t.status === "running");
   const sig = running.map((t) => t.id).join(",");
   dom.runningHint.textContent = running.length
@@ -157,14 +194,13 @@ function renderRunningList(all) {
     : "暂无班车在运行，下方列出即将开行的班次";
   if (sig !== state.runningSig) {
     state.runningSig = sig;
-    dom.runningList.innerHTML = running.map(runningItemHtml).join("");
+    dom.runningList.innerHTML = running.map((t) => runningItemHtml(t, now)).join("");
   }
   dom.runningList.querySelectorAll("li").forEach((li) => {
     const trip = all.find((t) => t.id === li.dataset.id);
     if (!trip) return;
     const pct = Math.round(trip.progress * 100);
-    const remaining = trip.arrMs - Date.now();
-    const elapsed = DURATION_MIN * 60000 - remaining;
+    const remaining = trip.arrMs - now;
     const fill = li.querySelector('[data-role="fill"]');
     const pctEl = li.querySelector('[data-role="pct"]');
     const remEl = li.querySelector('[data-role="remaining"]');
@@ -177,12 +213,18 @@ function renderRunningList(all) {
 /* ===== Upcoming list ===== */
 function filterUpcoming(all) {
   let list = all.filter((t) => t.status === "upcoming");
-  if (state.routeFilter === "rainbow") {
-    list = list.filter((t) => t.rainbow);
+  if (state.routeFilter === "norainbow") {
+    list = list.filter((t) => !t.rainbow);
   } else if (state.routeFilter !== "all") {
     list = list.filter((t) => t.route === state.routeFilter);
   }
   return list.sort((a, b) => a.depMs - b.depMs);
+}
+
+function ticketClass(info) {
+  if (info.type === "free") return "ticket--free";
+  if (info.type === "rainbow") return "ticket--rainbow";
+  return `ticket--${info.phase}`;
 }
 
 function priceTagHtml(price) {
@@ -190,9 +232,10 @@ function priceTagHtml(price) {
   return `<span class="tag tag--paid">${escapeHtml(price)}</span>`;
 }
 
-function tripItemHtml(trip, isNext) {
+function tripItemHtml(trip, now, isNext) {
   const rainbowTag = trip.rainbow ? '<span class="tag">🌈</span>' : "";
-  const soon = trip.depMs - Date.now() <= 10 * 60000;
+  const soon = trip.depMs - now <= 10 * 60000;
+  const info = ticketInfo(trip, now);
   return `
     <li class="trip-item${isNext ? " trip-item--next" : ""}" data-id="${trip.id}">
       <span class="trip-item__time">${escapeHtml(trip.dep)}</span>
@@ -202,12 +245,13 @@ function tripItemHtml(trip, isNext) {
         ${rainbowTag}
       </span>
       ${priceTagHtml(trip.price)}
+      <span class="trip-item__ticket ${ticketClass(info)}" data-role="ticket">${escapeHtml(info.label)}</span>
       <span class="trip-item__countdown${soon ? " trip-item__countdown--soon" : ""}" data-role="countdown">—</span>
     </li>
   `;
 }
 
-function renderUpcoming(all) {
+function renderUpcoming(all, now) {
   const list = filterUpcoming(all);
   const sig = list.map((t) => t.id).join(",");
   dom.upcomingEmpty.hidden = list.length > 0;
@@ -215,16 +259,23 @@ function renderUpcoming(all) {
   if (sig !== state.upcomingSig) {
     state.upcomingSig = sig;
     dom.tripList.innerHTML = list
-      .map((t, i) => tripItemHtml(t, i === 0))
+      .map((t, i) => tripItemHtml(t, now, i === 0))
       .join("");
   }
   dom.tripList.querySelectorAll("li").forEach((li) => {
     const trip = list.find((t) => t.id === li.dataset.id);
     if (!trip) return;
     const cd = li.querySelector('[data-role="countdown"]');
-    if (!cd) return;
-    const diff = trip.depMs - Date.now();
-    cd.textContent = diff <= 0 ? "即将发车" : `${formatDurationLabel(diff)}后`;
+    if (cd) {
+      const diff = trip.depMs - now;
+      cd.textContent = diff <= 0 ? "即将发车" : `${formatDurationLabel(diff)}后`;
+    }
+    const tk = li.querySelector('[data-role="ticket"]');
+    if (tk) {
+      const info = ticketInfo(trip, now);
+      tk.textContent = info.label;
+      tk.className = `trip-item__ticket ${ticketClass(info)}`;
+    }
   });
 }
 
@@ -253,26 +304,27 @@ function bindChips() {
       c.classList.toggle("filter-chip--active", active);
       c.setAttribute("aria-pressed", String(active));
     });
-    renderUpcoming(computeAll(TRIPS, Date.now(), DURATION_BY_ROUTE, DURATION_MIN));
+    renderUpcoming(computeAll(TRIPS, now(), DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), now());
   });
 }
 
 /* ===== Tick loop ===== */
 function tick() {
-  const now = Date.now();
-  const all = computeAll(TRIPS, now, DURATION_BY_ROUTE, DURATION_MIN);
-  const nowDate = new Date(now);
+  const n = now();
+  const all = computeAll(TRIPS, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
+  const nowDate = new Date(n);
   dom.clock.textContent = formatClock(nowDate);
   dom.clock.setAttribute("datetime", nowDate.toISOString());
-  renderMainTrack(all, now);
-  renderSecondaryTrack(all, now);
-  renderRunningList(all);
-  renderUpcoming(all);
-  renderStatus(all, now);
+  renderTrack(all, n);
+  renderRunningList(all, n);
+  renderUpcoming(all, n);
+  renderStatus(all, n);
 }
 
 /* ===== Init ===== */
 bindTheme();
 bindChips();
+bindDetailToggle();
+initClockSync();
 tick();
 setInterval(tick, 1000);

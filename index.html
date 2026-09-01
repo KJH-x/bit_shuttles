@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>良乡 ⇄ 中关村 · 校园班车</title>
-  <meta name="description" content="北京理工大学良乡 ⇄ 中关村（含回龙观 → 良乡）工作日校园班车时刻表 — 实时运行进度与即将开行班次">
+  <meta name="description" content="北京理工大学良乡 ⇄ 中关村工作日校园班车时刻表 — 实时运行进度、购票倒计时与即将开行班次">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,9 +15,12 @@
       <p class="eyebrow">BIT · Campus Shuttle · 工作日</p>
       <div class="hero__row">
         <h1>良乡 ⇄ 中关村 校园班车</h1>
-        <time id="liveClock" class="live-clock" datetime="">--:--:--</time>
+        <div class="clock-wrap">
+          <time id="liveClock" class="live-clock" datetime="">--:--:--</time>
+          <span id="syncBadge" class="sync-badge" hidden></span>
+        </div>
       </div>
-      <p class="hero__desc">根据工作日时刻表实时推算：顶部显示<b>正在运行</b>的班次（中关村-良乡双向共享一条进度条），下方列出<b>即将开行</b>的班次。</p>
+      <p class="hero__desc">顶部为<b>正在运行</b>的班次（中关村-良乡双向，两行车道，悬停查看剩余时间），下方列出<b>即将开行</b>班次及<b>购票倒计时</b>。</p>
     </div>
   </header>
 
@@ -35,27 +38,30 @@
     </section>
 
     <section class="panel" aria-labelledby="runningTitle">
-      <h2 class="panel__title" id="runningTitle">正在运行</h2>
-      <p class="panel__hint" id="runningHint"></p>
+      <div class="panel__head">
+        <div>
+          <h2 class="panel__title" id="runningTitle">正在运行</h2>
+          <p class="panel__hint" id="runningHint"></p>
+        </div>
+        <button class="btn btn--outline" id="detailToggle" type="button" aria-expanded="false" aria-controls="runningDetail">显示全部开行详情</button>
+      </div>
 
       <div class="route-track" id="trackMain">
         <div class="route-track__labels">
           <span class="route-track__end route-track__end--left">良乡</span>
           <span class="route-track__end route-track__end--right">中关村</span>
         </div>
-        <div class="route-track__line" id="trackMainLine" aria-hidden="true"></div>
+        <div class="route-track__lanes">
+          <div class="lane lane--c" id="laneC" role="img" aria-label="中关村 → 良乡"></div>
+          <div class="lane lane--a" id="laneA" role="img" aria-label="良乡 → 中关村"></div>
+        </div>
         <p class="route-track__empty" id="trackMainEmpty">当前没有班车在运行</p>
       </div>
 
-      <div class="route-track route-track--secondary" id="trackSecondary" hidden>
-        <div class="route-track__labels">
-          <span class="route-track__end route-track__end--left">回龙观</span>
-          <span class="route-track__end route-track__end--right">良乡</span>
-        </div>
-        <div class="route-track__line" id="trackSecondaryLine" aria-hidden="true"></div>
+      <div class="running-detail" id="runningDetail" hidden>
+        <h3 class="running-detail__title">各班次进度</h3>
+        <ul class="running-list" id="runningList" aria-label="运行中的班次进度明细"></ul>
       </div>
-
-      <ul class="running-list" id="runningList" aria-label="运行中的班次明细"></ul>
     </section>
 
     <section class="panel" aria-labelledby="upcomingTitle">
@@ -64,8 +70,7 @@
         <button class="filter-chip filter-chip--active" data-route="all" aria-pressed="true" type="button">全部</button>
         <button class="filter-chip" data-route="a" aria-pressed="false" type="button">良乡 → 中关村</button>
         <button class="filter-chip" data-route="c" aria-pressed="false" type="button">中关村 → 良乡</button>
-        <button class="filter-chip" data-route="b" aria-pressed="false" type="button">回龙观 → 良乡</button>
-        <button class="filter-chip filter-chip--rainbow" data-route="rainbow" aria-pressed="false" type="button">🌈 仅彩虹班车</button>
+        <button class="filter-chip filter-chip--norainbow" data-route="norainbow" aria-pressed="false" type="button">除彩虹巴士</button>
       </div>
       <p id="resultsStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
       <ul class="trip-list" id="tripList" aria-label="即将开行的班次"></ul>
@@ -78,7 +83,7 @@
 
   <footer class="site-footer">
     <p>数据：工作日时刻表 · 纯静态页面 · 浏览器本地实时推算（运行耗时当前按 1 小时估算，待更新）</p>
-    <p>彩虹班车标记 🌈 · 票价 10 元班次以 ¥10.00 显示</p>
+    <p>彩虹班车全周可约 🌈 · 免费班次全天可约 · 一般班次开售即抢（开售 5 分钟内售罄）</p>
   </footer>
 
   <noscript>

@@ -13,9 +13,9 @@
   },
   "searchEntry": "https://campus-shuttle-board.pages.dev/",
   "counts": {
-    "routes": 3,
-    "trips": 47,
+    "routes": 2,
+    "trips": 46,
     "durationMin": 60
   },
-  "notes": "工作日校园班车时刻表 · 纯静态实时推算（浏览器本地计算，运行耗时暂按 1 小时估算，待提供实际耗时后更新 schedule-data.js）"
+  "notes": "工作日校园班车时刻表（良乡⇄中关村双向）· 纯静态实时推算（浏览器本地计算，含网络时间同步与购票倒计时；运行耗时暂按 1 小时估算，待提供实际耗时后更新 schedule-data.js）"
 }
