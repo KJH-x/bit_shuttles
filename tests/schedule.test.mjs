@@ -58,10 +58,10 @@ test("tripStatus: upcoming / running / past with 1h duration", () => {
 });
 
 test("tripStatus: per-trip dur override beats per-route and default", () => {
-  const trip = { id: "y", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, dur: 90 };
+  const trip = { id: "y", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, dur: 45 };
   const base = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
-  assert.equal(tripDuration(trip, DURATION_BY_ROUTE, DURATION_MIN), 90);
-  const running = tripStatus(trip, base + 45 * 60000, DURATION_BY_ROUTE, DURATION_MIN);
+  assert.equal(tripDuration(trip, DURATION_BY_ROUTE, DURATION_MIN), 45);
+  const running = tripStatus(trip, base + 22.5 * 60000, DURATION_BY_ROUTE, DURATION_MIN);
   assert.equal(running.status, "running");
   assert.ok(Math.abs(running.progress - 0.5) < 1e-9);
 });
@@ -95,18 +95,18 @@ test("lookupDuration: uses nearest interpolation for off-grid times", () => {
   assert.equal(lookupDuration("20:40", profile), 48);
 });
 
-test("tripDuration: route c uses profile, route a uses profile", () => {
+test("tripDuration: durations over 1 hour are capped at 60 min", () => {
   const tripC = { id: "c1", route: "c", dep: "17:20", price: "¥10.00", rainbow: false };
-  assert.equal(tripDuration(tripC, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 80);
+  assert.equal(tripDuration(tripC, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 60);
   const tripA = { id: "a1", route: "a", dep: "17:20", price: "¥10.00", rainbow: false };
   assert.equal(tripDuration(tripA, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 53);
 });
 
-test("tripStatus: route c arrival reflects profile duration", () => {
-  const base = depToMs("17:20", new Date("2026-09-01T16:00:00+08:00"));
+test("tripStatus: route c arrival reflects capped profile duration", () => {
   const tripC = { id: "c16", route: "c", dep: "17:20", price: "¥10.00", rainbow: false };
-  const st = tripStatus(tripC, base + 40 * 60000, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
-  assert.equal(st.arrMs - st.depMs, 80 * 60000);
+  const depMs = depToMs("17:20", new Date("2026-09-01T16:00:00+08:00"));
+  const st = tripStatus(tripC, depMs + 30 * 60000, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
+  assert.equal(st.arrMs - st.depMs, 60 * 60000);
   assert.equal(st.status, "running");
   assert.ok(Math.abs(st.progress - 0.5) < 1e-9);
 });

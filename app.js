@@ -1,12 +1,12 @@
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-2";
+import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-3";
 import {
   formatClock,
   formatHM,
   formatDurationLabel,
   computeAll,
   ticketInfo
-} from "./lib/schedule.js?v=20260901-2";
-import { now, syncClock, getSyncState } from "./lib/time.js?v=20260901-2";
+} from "./lib/schedule.js?v=20260901-3";
+import { now, syncClock, getSyncState } from "./lib/time.js?v=20260901-3";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡" };
@@ -238,13 +238,15 @@ function tripItemHtml(trip, now, isNext) {
   const info = ticketInfo(trip, now);
   return `
     <li class="trip-item${isNext ? " trip-item--next" : ""}" data-id="${trip.id}">
-      <span class="trip-item__time">${escapeHtml(trip.dep)}</span>
+      <span class="trip-item__meta">
+        <span class="trip-item__time">${escapeHtml(trip.dep)}</span>
+        ${priceTagHtml(trip.price)}
+      </span>
       <span class="trip-item__route">
         <span class="trip-item__arrow" aria-hidden="true">↔</span>
         ${escapeHtml(ROUTE_LABEL[trip.route])}
         ${rainbowTag}
       </span>
-      ${priceTagHtml(trip.price)}
       <span class="trip-item__ticket ${ticketClass(info)}" data-role="ticket">${escapeHtml(info.label)}</span>
       <span class="trip-item__countdown${soon ? " trip-item__countdown--soon" : ""}" data-role="countdown">—</span>
     </li>
@@ -329,3 +331,4 @@ bindDetailToggle();
 initClockSync();
 tick();
 setInterval(tick, 1000);
+

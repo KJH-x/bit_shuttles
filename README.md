@@ -32,7 +32,9 @@
 
 ## 修改耗时
 
-当前全部按 1 小时估算。拿到实际预计耗时后改 `schedule-data.js`：
+- 耗时表原始预测值保留在 `lib/duration-profiles.js`（含重叠点），按发车时间**邻近插值**。
+- **超过 1 小时一律按 1 小时计**（`MAX_DURATION_MIN = 60`，理由：公交专用道，班车通常比轿车快）。灰色小字提示：预测时间仅考虑路况平均拥堵，无法保证突发事件影响，请以实际运行为准。
+- 页面下方提供「正向 / 反向」两个按钮，打开高德地图查看实时路线耗时。
 
 ```js
 export const DURATION_MIN = 60;            // 默认耗时（分钟）
@@ -40,11 +42,11 @@ export const DURATION_BY_ROUTE = {
   a: 60,                                    // 按线路覆盖：a=良乡→中关村
   c: 60                                     // c=中关村→良乡
 };
-// 或在某条班次上单独覆盖：
+// 或在某条班次上单独覆盖（仍受 1 小时封顶约束）：
 { id: "a3", route: "a", dep: "07:30", price: "¥10.00", rainbow: true, dur: 70 }
 ```
 
-优先级：`trip.dur` > `DURATION_BY_ROUTE[route]` > `DURATION_MIN`。
+优先级：`trip.dur` > `DURATION_BY_ROUTE[route]` > 耗时表邻近插值 > `DURATION_MIN`，最终统一 `min(…, 60)`。
 
 ## 本地预览与测试
 

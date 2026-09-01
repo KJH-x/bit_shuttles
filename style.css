@@ -599,6 +599,34 @@ a:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* ===== Amap real-time links ===== */
+.amap-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.amap-links__label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.amap-links__btn {
+  font-size: .8rem;
+  padding: 6px 14px;
+}
+
+/* ===== Panel note (gray small print) ===== */
+.panel__note {
+  margin-top: 14px;
+  font-size: .75rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 /* ===== Filter chips ===== */
 .filter-chips {
   display: flex;
@@ -665,6 +693,13 @@ a:hover {
 .trip-item--next {
   border-color: var(--primary);
   background: var(--accent-light);
+}
+
+.trip-item__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 120px;
 }
 
 .trip-item__time {
@@ -842,10 +877,19 @@ a:hover {
   }
   .trip-item {
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 8px 10px;
+    align-items: flex-start;
+  }
+  .trip-item__meta {
+    flex-basis: 100%;
+    min-width: 0;
   }
   .trip-item__countdown {
     text-align: left;
     min-width: 0;
+  }
+  .amap-links {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
