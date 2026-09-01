@@ -1,12 +1,12 @@
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js";
+import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-2";
 import {
   formatClock,
   formatHM,
   formatDurationLabel,
   computeAll,
   ticketInfo
-} from "./lib/schedule.js";
-import { now, syncClock, getSyncState } from "./lib/time.js";
+} from "./lib/schedule.js?v=20260901-2";
+import { now, syncClock, getSyncState } from "./lib/time.js?v=20260901-2";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡" };
