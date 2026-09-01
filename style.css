@@ -123,6 +123,7 @@ html[data-theme="system"] {
 html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 body {
@@ -132,6 +133,7 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   transition: background .3s ease, color .3s ease;
+  overflow-x: hidden;
 }
 
 a {
@@ -476,8 +478,9 @@ a:hover {
   padding: 4px 10px;
   border-radius: 8px;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity .15s ease;
+  transition: opacity .15s ease, visibility .15s ease;
   z-index: 5;
   box-shadow: var(--shadow);
 }
@@ -490,6 +493,7 @@ a:hover {
 .bus-marker:hover .bus-marker__tooltip,
 .route-track.show-all .bus-marker__tooltip {
   opacity: 1;
+  visibility: visible;
 }
 
 .route-track.show-all .bus-marker__time {

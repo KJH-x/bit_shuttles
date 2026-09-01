@@ -285,7 +285,8 @@ function renderStatus(all, now) {
   if (upcoming.length) {
     const next = upcoming[0];
     const diff = next.depMs - now;
-    dom.nextStatus.innerHTML = `下一班：<strong>${escapeHtml(next.dep)}</strong> ${escapeHtml(ROUTE_LABEL[next.route])} · 约 <strong>${escapeHtml(formatDurationLabel(diff))}</strong>后发车`;
+    const suffix = diff <= 60000 ? "即将发车" : `约 ${formatDurationLabel(diff)}后发车`;
+    dom.nextStatus.innerHTML = `下一班：<strong>${escapeHtml(next.dep)}</strong> ${escapeHtml(ROUTE_LABEL[next.route])} · <strong>${escapeHtml(suffix)}</strong>`;
   } else {
     dom.nextStatus.textContent = "今日班次已全部开行";
   }

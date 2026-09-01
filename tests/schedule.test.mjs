@@ -77,6 +77,16 @@ test("lookupDuration: nearest profile entry for arbitrary departure", () => {
   assert.equal(lookupDuration("23:45", profile), 42);
 });
 
+test("lookupDuration: route a (良乡→中关村) profile", () => {
+  const profile = DURATION_PROFILES.a;
+  assert.equal(lookupDuration("06:20", profile), 70);
+  assert.equal(lookupDuration("08:10", profile), 69);
+  assert.equal(lookupDuration("17:05", profile), 54);
+  assert.equal(lookupDuration("12:00", profile), 42);
+  assert.equal(lookupDuration("20:15", profile), 43);
+  assert.equal(lookupDuration("22:50", profile), 39);
+});
+
 test("lookupDuration: uses nearest interpolation for off-grid times", () => {
   const profile = DURATION_PROFILES.c;
   assert.equal(lookupDuration("07:22", profile), 47);
@@ -85,11 +95,11 @@ test("lookupDuration: uses nearest interpolation for off-grid times", () => {
   assert.equal(lookupDuration("20:40", profile), 48);
 });
 
-test("tripDuration: route c uses profile, route a uses default", () => {
+test("tripDuration: route c uses profile, route a uses profile", () => {
   const tripC = { id: "c1", route: "c", dep: "17:20", price: "¥10.00", rainbow: false };
   assert.equal(tripDuration(tripC, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 80);
   const tripA = { id: "a1", route: "a", dep: "17:20", price: "¥10.00", rainbow: false };
-  assert.equal(tripDuration(tripA, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 60);
+  assert.equal(tripDuration(tripA, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 53);
 });
 
 test("tripStatus: route c arrival reflects profile duration", () => {
