@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>良乡 ⇄ 中关村 · 校园班车</title>
   <meta name="description" content="北京理工大学良乡 ⇄ 中关村工作日校园班车时刻表 — 实时运行进度、购票倒计时与即将开行班次">
-  <link rel="stylesheet" href="style.css?v=20260901-4">
+  <link rel="stylesheet" href="style.css?v=20260901-5">
 </head>
 <body>
   <a href="#main-content" class="skip-link">跳转到主内容</a>
@@ -42,11 +42,11 @@
       </div>
 
       <div class="route-track" id="trackMain">
-        <div class="route-track__labels">
-          <span class="route-track__end route-track__end--left">良乡</span>
-          <span class="route-track__end route-track__end--right">中关村</span>
-        </div>
         <div class="route-track__lanes">
+          <div class="route-track__bar" aria-hidden="true">
+            <span class="route-track__end route-track__end--left">良乡</span>
+            <span class="route-track__end route-track__end--right">中关村</span>
+          </div>
           <div class="lane lane--c" id="laneC" role="img" aria-label="中关村 → 良乡"></div>
           <div class="lane lane--a" id="laneA" role="img" aria-label="良乡 → 中关村"></div>
         </div>
@@ -61,9 +61,25 @@
       </div>
 
       <div class="amap-links" aria-label="高德地图实时路线耗时">
-        <span class="amap-links__label">实时路线耗时</span>
-        <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&daddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&sort=dist" target="_blank" rel="noopener" title="良乡南校区 → 中关村校区">良乡 → 中关村</a>
-        <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&daddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&sort=dist" target="_blank" rel="noopener" title="中关村校区 → 良乡南校区">中关村 → 良乡</a>
+        <span class="amap-links__label">实时路线耗时（跳转高德导航）</span>
+        <div class="amap-links__btns">
+          <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&daddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&sort=dist" target="_blank" rel="noopener" title="良乡南校区 → 中关村校区">良乡 → 中关村</a>
+          <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&daddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&sort=dist" target="_blank" rel="noopener" title="中关村校区 → 良乡南校区">中关村 → 良乡</a>
+        </div>
+        <div class="amap-qr" aria-label="手机扫码打开高德实时路线">
+          <span class="amap-qr__tip" aria-hidden="true"></span>
+          <p class="amap-qr__hint">电脑端请用手机扫码打开高德实时路线</p>
+          <div class="amap-qr__grid">
+            <figure class="amap-qr__item">
+              <img src="assets/qr-forward.png" alt="良乡→中关村 高德导航二维码" width="150" height="150" loading="lazy">
+              <figcaption>良乡 → 中关村</figcaption>
+            </figure>
+            <figure class="amap-qr__item">
+              <img src="assets/qr-reverse.png" alt="中关村→良乡 高德导航二维码" width="150" height="150" loading="lazy">
+              <figcaption>中关村 → 良乡</figcaption>
+            </figure>
+          </div>
+        </div>
       </div>
       <p class="panel__note">预测的时间仅考虑路况平均拥堵，无法保证突发事件影响，请以实际运行为准。</p>
     </section>
@@ -77,7 +93,16 @@
         <button class="filter-chip filter-chip--norainbow" data-route="norainbow" aria-pressed="false" type="button">除彩虹巴士</button>
       </div>
       <p id="resultsStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
-      <ul class="trip-list" id="tripList" aria-label="即将开行的班次"></ul>
+      <div class="trip-columns" id="tripColumns">
+        <section class="trip-column" id="tripColumnA" aria-labelledby="colTitleA">
+          <h3 class="trip-column__title" id="colTitleA">良乡出发 → 中关村</h3>
+          <ul class="trip-list" id="tripListA" aria-label="良乡出发的班次"></ul>
+        </section>
+        <section class="trip-column" id="tripColumnC" aria-labelledby="colTitleC">
+          <h3 class="trip-column__title" id="colTitleC">中关村出发 → 良乡</h3>
+          <ul class="trip-list" id="tripListC" aria-label="中关村出发的班次"></ul>
+        </section>
+      </div>
       <div class="empty-state" id="upcomingEmpty" hidden>
         <h3>今天没有更多班次了</h3>
         <p>今日班次均已开行，请明天再来查看。</p>
@@ -96,5 +121,6 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260901-4" type="module"></script></body>
+  <script src="app.js?v=20260901-5" type="module"></script></body>
 </html>
+

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "../schedule-data.js";
-import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration } from "../lib/schedule.js";
+import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel } from "../lib/schedule.js";
 
 const ROUTE_IDS = new Set(ROUTES.map((r) => r.id));
 
@@ -170,4 +170,23 @@ test("ticketInfo: regular trips open T-1h, countdown before", () => {
 
   const closed = ticketInfo(trip, depMs - 2 * 60000);
   assert.equal(closed.phase, "closed");
+});
+
+test("departureLabel: countdown before, 已发车 within T+10, hidden label", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs };
+  assert.match(departureLabel(trip, depMs - 30 * 60000), /30 分钟后/);
+  assert.equal(departureLabel(trip, depMs + 2 * 60000), "已发车 · 可能还在上车点");
+  assert.equal(departureLabel(trip, depMs + 6 * 60000), "已发车");
+  assert.equal(departureLabel(trip, depMs + 9 * 60000), "已发车");
+});
+
+test("filterUpcoming visibility: running trips shown until T+10, hidden after", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false };
+  const runningNow = tripStatus(trip, depMs + 6 * 60000, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
+  assert.equal(runningNow.status, "running");
+  const hideAfter = depMs + 10 * 60000;
+  assert.ok(depMs + 6 * 60000 < hideAfter, "within T+10 -> still visible");
+  assert.ok(depMs + 12 * 60000 >= hideAfter, "after T+10 -> hidden");
 });

@@ -2,20 +2,21 @@
   "schemaVersion": 1,
   "site": "campus-shuttle-board",
   "siteName": "良乡 ⇄ 中关村 · 校园班车",
-  "version": "2026.09.01",
-  "generatedAt": "2026-09-01T00:00:00.000Z",
-  "updated": "2026-09-01",
+  "version": "2026.09.02",
+  "generatedAt": "2026-09-02T00:00:00.000Z",
+  "updated": "2026-09-02",
   "deepLink": {
-    "base": "https://campus-shuttle-board.pages.dev/",
+    "base": "https://bitbus.nslc.top/",
     "formats": {
-      "search": "https://campus-shuttle-board.pages.dev/"
+      "search": "https://bitbus.nslc.top/"
     }
   },
-  "searchEntry": "https://campus-shuttle-board.pages.dev/",
+  "searchEntry": "https://bitbus.nslc.top/",
   "counts": {
     "routes": 2,
     "trips": 46,
-    "durationMin": 60
+    "durationMin": 60,
+    "qrAssets": 2
   },
-  "notes": "工作日校园班车时刻表（良乡⇄中关村双向）· 纯静态实时推算（浏览器本地计算，含网络时间同步与购票倒计时；运行耗时暂按 1 小时估算，待提供实际耗时后更新 schedule-data.js）"
+  "notes": "工作日校园班车时刻表（良乡⇄中关村双向）· 纯静态实时推算（网络时间同步、购票倒计时、桌面双列 + 高德二维码、T+10 隐藏已发车；耗时>1h 封顶 60min，原始预测保留于 lib/duration-profiles.js）"
 }

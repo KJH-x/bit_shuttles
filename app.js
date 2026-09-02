@@ -1,12 +1,13 @@
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-4";
+import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-5";
 import {
   formatClock,
   formatHM,
   formatDurationLabel,
   computeAll,
-  ticketInfo
-} from "./lib/schedule.js?v=20260901-4";
-import { now, syncClock } from "./lib/time.js?v=20260901-4";
+  ticketInfo,
+  departureLabel
+} from "./lib/schedule.js?v=20260901-5";
+import { now, syncClock } from "./lib/time.js?v=20260901-5";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡" };
@@ -25,7 +26,10 @@ const dom = {
   detailToggle: document.getElementById("detailToggle"),
   runningList: document.getElementById("runningList"),
   runningHint: document.getElementById("runningHint"),
-  tripList: document.getElementById("tripList"),
+  tripColumnA: document.getElementById("tripColumnA"),
+  tripColumnC: document.getElementById("tripColumnC"),
+  tripListA: document.getElementById("tripListA"),
+  tripListC: document.getElementById("tripListC"),
   upcomingEmpty: document.getElementById("upcomingEmpty")
 };
 
@@ -192,8 +196,9 @@ function renderRunningList(all, now) {
 }
 
 /* ===== Upcoming list ===== */
-function filterUpcoming(all) {
-  let list = all.filter((t) => t.status === "upcoming");
+function filterUpcoming(all, now) {
+  const HIDE_AFTER_MS = 10 * 60000;
+  let list = all.filter((t) => t.status === "upcoming" || (t.status === "running" && now < t.depMs + HIDE_AFTER_MS));
   if (state.routeFilter === "norainbow") {
     list = list.filter((t) => !t.rainbow);
   } else if (state.routeFilter !== "all") {
@@ -233,24 +238,22 @@ function tripItemHtml(trip, now, isNext) {
   `;
 }
 
-function renderUpcoming(all, now) {
-  const list = filterUpcoming(all);
+function renderList(ul, list, now, highlightNext) {
   const sig = list.map((t) => t.id).join(",");
-  dom.upcomingEmpty.hidden = list.length > 0;
-  dom.resultsStatus.textContent = `即将开行 ${list.length} 个班次`;
+  const nextId = highlightNext && list.length ? list[0].id : null;
   if (sig !== state.upcomingSig) {
     state.upcomingSig = sig;
-    dom.tripList.innerHTML = list
-      .map((t, i) => tripItemHtml(t, now, i === 0))
+    ul.innerHTML = list
+      .map((t, i) => tripItemHtml(t, now, nextId === t.id))
       .join("");
   }
-  dom.tripList.querySelectorAll("li").forEach((li) => {
+  ul.querySelectorAll("li").forEach((li) => {
     const trip = list.find((t) => t.id === li.dataset.id);
     if (!trip) return;
     const cd = li.querySelector('[data-role="countdown"]');
     if (cd) {
-      const diff = trip.depMs - now;
-      cd.textContent = diff <= 0 ? "即将发车" : `${formatDurationLabel(diff)}后`;
+      cd.textContent = departureLabel(trip, now);
+      cd.classList.toggle("trip-item__countdown--soon", trip.depMs - now <= 10 * 60000);
     }
     const tk = li.querySelector('[data-role="ticket"]');
     if (tk) {
@@ -259,6 +262,19 @@ function renderUpcoming(all, now) {
       tk.className = `trip-item__ticket ${ticketClass(info)}`;
     }
   });
+}
+
+function renderUpcoming(all, now) {
+  const list = filterUpcoming(all, now);
+  const listA = list.filter((t) => t.route === "a");
+  const listC = list.filter((t) => t.route === "c");
+  const total = listA.length + listC.length;
+  dom.upcomingEmpty.hidden = total > 0;
+  dom.resultsStatus.textContent = `即将开行 ${total} 个班次`;
+  dom.tripColumnA.hidden = listA.length === 0;
+  dom.tripColumnC.hidden = listC.length === 0;
+  renderList(dom.tripListA, listA, now, true);
+  renderList(dom.tripListC, listC, now, !listA.length);
 }
 
 /* ===== Status line ===== */
@@ -311,5 +327,6 @@ bindDetailToggle();
 initClockSync();
 tick();
 setInterval(tick, 1000);
+
 
 

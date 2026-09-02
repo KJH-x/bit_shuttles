@@ -323,14 +323,30 @@ a:hover {
   padding: 8px 6px 6px;
 }
 
-.route-track__labels {
+.route-track__lanes {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 6px;
+}
+
+/* single rounded-rectangle bar in the middle of the two lanes */
+.route-track__bar {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  height: 34px;
+  border-radius: 999px;
+  background: var(--track-bg);
+  border: 1px solid var(--track-bound);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: .9rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 4px;
+  padding: 0 10px;
+  z-index: 0;
 }
 
 .route-track__end {
@@ -341,14 +357,8 @@ a:hover {
   font-size: .8rem;
 }
 
-.route-track__lanes {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin-top: 6px;
-}
-
-/* Each lane: a horizontal progress line with absolute-positioned bus markers */
+/* Each lane: a horizontal progress line with absolute-positioned bus markers.
+   Background hidden to keep a single central rounded rectangle; bus markers remain. */
 .lane {
   position: relative;
   height: 46px;
@@ -356,13 +366,13 @@ a:hover {
 }
 
 .lane--a {
-  background: var(--dir-a-soft);
-  border: 1px solid color-mix(in srgb, var(--dir-a) 35%, transparent);
+  background: transparent;
+  border: none;
 }
 
 .lane--c {
-  background: var(--dir-c-soft);
-  border: 1px solid color-mix(in srgb, var(--dir-c) 35%, transparent);
+  background: transparent;
+  border: none;
 }
 
 /* bus marker: pill (rounded rect, r=1/2 height) with a direction tip */
@@ -586,6 +596,13 @@ a:hover {
   color: var(--muted);
 }
 
+.amap-links__btns {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 100%;
+}
+
 .amap-links__btn {
   font-size: .8rem;
   padding: 6px 14px;
@@ -593,6 +610,72 @@ a:hover {
   flex: 1 1 0;
   justify-content: center;
   min-width: 0;
+}
+
+/* ===== QR bubble (desktop only; static QR for Amap links) ===== */
+.amap-qr {
+  display: none;
+  flex-basis: 100%;
+  position: relative;
+  margin-top: 6px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.amap-qr__tip {
+  position: absolute;
+  top: -7px;
+  left: 18px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 8px solid var(--surface-2);
+}
+
+.amap-qr__hint {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.amap-qr__grid {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.amap-qr__item {
+  margin: 0;
+  text-align: center;
+}
+
+.amap-qr__item img {
+  width: 130px;
+  height: 130px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px;
+  border: 1px solid var(--border);
+}
+
+.amap-qr__item figcaption {
+  margin-top: 6px;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+@media (min-width: 900px) {
+  .amap-qr {
+    display: block;
+  }
 }
 
 /* ===== Panel note (gray small print) ===== */
@@ -645,6 +728,32 @@ a:hover {
 }
 .filter-chip--norainbow.filter-chip--active {
   border-style: solid;
+}
+
+/* ===== Trip columns (desktop two columns by direction) ===== */
+.trip-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+.trip-column__title {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.trip-column[hidden] {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .trip-columns {
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
 }
 
 /* ===== Trip list ===== */
@@ -848,8 +957,5 @@ a:hover {
   }
   .trip-item__countdown {
     text-align: left;
-  }
-  .amap-links {
-    align-items: stretch;
   }
 }

@@ -2,7 +2,7 @@ export const DURATION_MIN = 60;
 
 export const DURATION_BY_ROUTE = {};
 
-export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260901-4";
+export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260901-5";
 
 export const ROUTES = [
   { id: "a", label: "良乡 → 中关村" },
@@ -58,5 +58,6 @@ export const TRIPS = [
   { id: "c22", route: "c", dep: "22:30", price: "¥0.00",  rainbow: false },
   { id: "c23", route: "c", dep: "22:50", price: "¥0.00",  rainbow: false }
 ];
+
 
 
