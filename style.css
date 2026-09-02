@@ -754,6 +754,16 @@ a:hover {
     gap: 20px;
     align-items: start;
   }
+  #tripColumnA .trip-item {
+    text-align: left;
+  }
+  #tripColumnC .trip-item {
+    text-align: right;
+    align-items: flex-end;
+  }
+  #tripColumnC .trip-item__row1 {
+    justify-content: flex-end;
+  }
 }
 
 /* ===== Trip list ===== */

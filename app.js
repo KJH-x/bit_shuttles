@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-5";
+import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-6";
 import {
   formatClock,
   formatHM,
@@ -6,8 +6,8 @@ import {
   computeAll,
   ticketInfo,
   departureLabel
-} from "./lib/schedule.js?v=20260901-5";
-import { now, syncClock } from "./lib/time.js?v=20260901-5";
+} from "./lib/schedule.js?v=20260901-6";
+import { now, syncClock } from "./lib/time.js?v=20260901-6";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡" };
@@ -274,7 +274,7 @@ function renderUpcoming(all, now) {
   dom.tripColumnA.hidden = listA.length === 0;
   dom.tripColumnC.hidden = listC.length === 0;
   renderList(dom.tripListA, listA, now, true);
-  renderList(dom.tripListC, listC, now, !listA.length);
+  renderList(dom.tripListC, listC, now, true);
 }
 
 /* ===== Status line ===== */
@@ -327,6 +327,7 @@ bindDetailToggle();
 initClockSync();
 tick();
 setInterval(tick, 1000);
+
 
 
 
