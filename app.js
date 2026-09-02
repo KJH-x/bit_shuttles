@@ -1,19 +1,18 @@
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-3";
+import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-4";
 import {
   formatClock,
   formatHM,
   formatDurationLabel,
   computeAll,
   ticketInfo
-} from "./lib/schedule.js?v=20260901-3";
-import { now, syncClock, getSyncState } from "./lib/time.js?v=20260901-3";
+} from "./lib/schedule.js?v=20260901-4";
+import { now, syncClock } from "./lib/time.js?v=20260901-4";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡" };
 
 const dom = {
   clock: document.getElementById("liveClock"),
-  syncBadge: document.getElementById("syncBadge"),
   nextStatus: document.getElementById("nextStatus"),
   resultsStatus: document.getElementById("resultsStatus"),
   themeSelect: document.getElementById("themeSelect"),
@@ -66,29 +65,11 @@ function bindTheme() {
   });
 }
 
-/* ===== Clock sync badge ===== */
-function renderSyncBadge() {
-  const s = getSyncState();
-  if (!s.synced) {
-    dom.syncBadge.hidden = false;
-    dom.syncBadge.textContent = "使用本机时间";
-    dom.syncBadge.className = "sync-badge sync-badge--err";
-    dom.syncBadge.title = "未能同步网络时间，使用本机时钟";
-    return;
-  }
-  dom.syncBadge.hidden = false;
-  const src = s.source === "akamai" ? "Akamai CDN" : "TimeAPI";
-  dom.syncBadge.textContent = "网络时间已同步";
-  dom.syncBadge.className = "sync-badge sync-badge--ok";
-  dom.syncBadge.title = `同步源：${src} · 偏差 ${Math.round(s.offsetMs / 1000)}s · ${new Date(s.lastSync).toLocaleTimeString("zh-CN")}`;
-}
-
+/* ===== Clock sync (time correctness, badge removed) ===== */
 async function initClockSync() {
   await syncClock();
-  renderSyncBadge();
   setInterval(async () => {
     await syncClock();
-    renderSyncBadge();
   }, 15 * 60 * 1000);
 }
 
@@ -238,16 +219,15 @@ function tripItemHtml(trip, now, isNext) {
   const info = ticketInfo(trip, now);
   return `
     <li class="trip-item${isNext ? " trip-item--next" : ""}" data-id="${trip.id}">
-      <span class="trip-item__meta">
+      <span class="trip-item__row1">
         <span class="trip-item__time">${escapeHtml(trip.dep)}</span>
         ${priceTagHtml(trip.price)}
+        <span class="trip-item__ticket ${ticketClass(info)}" data-role="ticket">${escapeHtml(info.label)}</span>
       </span>
       <span class="trip-item__route">
-        <span class="trip-item__arrow" aria-hidden="true">↔</span>
         ${escapeHtml(ROUTE_LABEL[trip.route])}
         ${rainbowTag}
       </span>
-      <span class="trip-item__ticket ${ticketClass(info)}" data-role="ticket">${escapeHtml(info.label)}</span>
       <span class="trip-item__countdown${soon ? " trip-item__countdown--soon" : ""}" data-role="countdown">—</span>
     </li>
   `;
@@ -331,4 +311,5 @@ bindDetailToggle();
 initClockSync();
 tick();
 setInterval(tick, 1000);
+
 

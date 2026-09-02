@@ -202,35 +202,6 @@ a:hover {
   box-shadow: var(--shadow);
 }
 
-.sync-badge {
-  font-size: .72rem;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--muted);
-  border: 1px solid var(--border);
-}
-.sync-badge--ok {
-  background: var(--success);
-  color: #fff;
-  border-color: transparent;
-}
-.sync-badge--err {
-  background: var(--tag-bg);
-  color: var(--tag-text);
-}
-
-.hero__desc {
-  font-size: 1.05rem;
-  color: var(--muted);
-  max-width: 760px;
-}
-
-.hero__desc b {
-  color: var(--primary);
-}
-
 /* ===== Main Shell ===== */
 .app-shell {
   max-width: 1520px;
@@ -609,6 +580,7 @@ a:hover {
 }
 
 .amap-links__label {
+  flex-basis: 100%;
   font-size: .78rem;
   font-weight: 600;
   color: var(--muted);
@@ -617,6 +589,10 @@ a:hover {
 .amap-links__btn {
   font-size: .8rem;
   padding: 6px 14px;
+  white-space: nowrap;
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: 0;
 }
 
 /* ===== Panel note (gray small print) ===== */
@@ -681,8 +657,8 @@ a:hover {
 
 .trip-item {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 6px;
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -695,11 +671,11 @@ a:hover {
   background: var(--accent-light);
 }
 
-.trip-item__meta {
-  display: inline-flex;
+.trip-item__row1 {
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
-  min-width: 120px;
 }
 
 .trip-item__time {
@@ -713,12 +689,6 @@ a:hover {
 .trip-item__route {
   font-weight: 600;
   color: var(--text);
-  flex: 1;
-}
-
-.trip-item__arrow {
-  color: var(--muted);
-  margin: 0 4px;
 }
 
 .trip-item__price {
@@ -805,8 +775,6 @@ a:hover {
   font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-  min-width: 96px;
-  text-align: right;
 }
 
 .trip-item__countdown--soon {
@@ -875,21 +843,13 @@ a:hover {
   .panel {
     padding: 16px;
   }
-  .trip-item {
-    flex-wrap: wrap;
+  .trip-item__row1 {
     gap: 8px 10px;
-    align-items: flex-start;
-  }
-  .trip-item__meta {
-    flex-basis: 100%;
-    min-width: 0;
   }
   .trip-item__countdown {
     text-align: left;
-    min-width: 0;
   }
   .amap-links {
-    flex-direction: column;
     align-items: stretch;
   }
 }

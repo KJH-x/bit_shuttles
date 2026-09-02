@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>良乡 ⇄ 中关村 · 校园班车</title>
   <meta name="description" content="北京理工大学良乡 ⇄ 中关村工作日校园班车时刻表 — 实时运行进度、购票倒计时与即将开行班次">
-  <link rel="stylesheet" href="style.css?v=20260901-3">
+  <link rel="stylesheet" href="style.css?v=20260901-4">
 </head>
 <body>
   <a href="#main-content" class="skip-link">跳转到主内容</a>
@@ -17,10 +17,8 @@
         <h1>良乡 ⇄ 中关村 校园班车</h1>
         <div class="clock-wrap">
           <time id="liveClock" class="live-clock" datetime="">--:--:--</time>
-          <span id="syncBadge" class="sync-badge" hidden></span>
         </div>
       </div>
-      <p class="hero__desc">顶部为<b>正在运行</b>的班次（中关村-良乡双向，两行车道，悬停查看剩余时间），下方列出<b>即将开行</b>班次及<b>购票倒计时</b>。</p>
     </div>
   </header>
 
@@ -39,11 +37,8 @@
 
     <section class="panel" aria-labelledby="runningTitle">
       <div class="panel__head">
-        <div>
-          <h2 class="panel__title" id="runningTitle">正在运行</h2>
-          <p class="panel__hint" id="runningHint"></p>
-        </div>
-        <button class="btn btn--outline" id="detailToggle" type="button" aria-expanded="false" aria-controls="runningDetail">显示全部开行详情</button>
+        <h2 class="panel__title" id="runningTitle">正在运行</h2>
+        <p class="panel__hint" id="runningHint"></p>
       </div>
 
       <div class="route-track" id="trackMain">
@@ -58,15 +53,17 @@
         <p class="route-track__empty" id="trackMainEmpty">当前没有班车在运行</p>
       </div>
 
+      <button class="btn btn--outline running-toggle" id="detailToggle" type="button" aria-expanded="false" aria-controls="runningDetail">显示全部开行详情</button>
+
       <div class="running-detail" id="runningDetail" hidden>
         <h3 class="running-detail__title">各班次进度</h3>
         <ul class="running-list" id="runningList" aria-label="运行中的班次进度明细"></ul>
       </div>
 
       <div class="amap-links" aria-label="高德地图实时路线耗时">
-        <span class="amap-links__label">实时路线耗时（高德）</span>
-        <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&daddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&sort=dist" target="_blank" rel="noopener" title="良乡南校区 → 中关村校区">正向 · 良乡 → 中关村</a>
-        <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&daddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&sort=dist" target="_blank" rel="noopener" title="中关村校区 → 良乡南校区">反向 · 中关村 → 良乡</a>
+        <span class="amap-links__label">实时路线耗时</span>
+        <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&daddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&sort=dist" target="_blank" rel="noopener" title="良乡南校区 → 中关村校区">良乡 → 中关村</a>
+        <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&daddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&sort=dist" target="_blank" rel="noopener" title="中关村校区 → 良乡南校区">中关村 → 良乡</a>
       </div>
       <p class="panel__note">预测的时间仅考虑路况平均拥堵，无法保证突发事件影响，请以实际运行为准。</p>
     </section>
@@ -99,5 +96,5 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260901-3" type="module"></script></body>
+  <script src="app.js?v=20260901-4" type="module"></script></body>
 </html>
