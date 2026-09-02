@@ -1,4 +1,4 @@
-const CACHE_NAME = "bitbus-static-v20260902-1";
+const CACHE_NAME = "bitbus-static-v20260902-3";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -14,7 +14,9 @@ const CORE_ASSETS = [
   "/assets/qr-reverse.png",
   "/lib/schedule.js",
   "/lib/time.js",
-  "/lib/duration-profiles.js"
+  "/lib/duration-profiles.js",
+  "/lib/install-guide.js",
+  "/lib/qq-guide.js"
 ];
 
 self.addEventListener("install", (event) => {

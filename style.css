@@ -20,8 +20,12 @@
   --track-bound: #d6d3d1;
   --dir-a: #d97706;
   --dir-c: #2563eb;
+  --dir-d: #16a34a;
+  --dir-e: #7c3aed;
   --dir-a-soft: #fef3c7;
   --dir-c-soft: #dbeafe;
+  --dir-d-soft: #dcfce7;
+  --dir-e-soft: #ede9fe;
   --header-bg: linear-gradient(135deg, #fef3c7 0%, #fefce8 40%, #fffbeb 100%);
   --shadow: 0 18px 40px rgba(28, 25, 23, .06);
   --code-bg: #1c1917;
@@ -49,8 +53,12 @@ html[data-theme="dark"] {
   --track-bound: #78716c;
   --dir-a: #fbbf24;
   --dir-c: #60a5fa;
+  --dir-d: #4ade80;
+  --dir-e: #a78bfa;
   --dir-a-soft: #451a03;
   --dir-c-soft: #172554;
+  --dir-d-soft: #052e16;
+  --dir-e-soft: #2e1065;
   --header-bg: linear-gradient(135deg, #451a03 0%, #1c1917 40%, #292524 100%);
   --shadow: none;
   --code-bg: #0c0a09;
@@ -79,8 +87,12 @@ html[data-theme="dark"] {
     --track-bound: #78716c;
     --dir-a: #fbbf24;
     --dir-c: #60a5fa;
+    --dir-d: #4ade80;
+    --dir-e: #a78bfa;
     --dir-a-soft: #451a03;
     --dir-c-soft: #172554;
+    --dir-d-soft: #052e16;
+    --dir-e-soft: #2e1065;
     --header-bg: linear-gradient(135deg, #451a03 0%, #1c1917 40%, #292524 100%);
     --shadow: none;
     --code-bg: #0c0a09;
@@ -164,6 +176,18 @@ a:hover {
   text-transform: uppercase;
   color: var(--primary);
   margin-bottom: 8px;
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .02em;
 }
 
 .hero__row {
@@ -317,21 +341,31 @@ a:hover {
   color: var(--tag-text);
 }
 
-/* ===== Route Track (bidirectional, two lanes) ===== */
+/* ===== Route Track (per-corridor bidirectional lanes) ===== */
 .route-track {
   position: relative;
   padding: 8px 6px 6px;
 }
 
-.route-track__lanes {
+.route-track__corridors {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 6px;
+}
+
+.route-corridor {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  margin-top: 6px;
 }
 
-/* single rounded-rectangle bar in the middle of the two lanes */
+.route-corridor[hidden] {
+  display: none;
+}
+
+/* single rounded-rectangle bar in the middle of the corridor's two lanes */
 .route-track__bar {
   position: absolute;
   top: 50%;
@@ -365,14 +399,16 @@ a:hover {
   border-radius: 999px;
 }
 
-.lane--a {
+.lane--a,
+.lane--c,
+.lane--d,
+.lane--e {
   background: transparent;
   border: none;
 }
 
-.lane--c {
-  background: transparent;
-  border: none;
+.lane[hidden] {
+  display: none;
 }
 
 /* bus marker: pill (rounded rect, r=1/2 height) with a direction tip */
@@ -410,13 +446,22 @@ a:hover {
   background: var(--dir-c);
 }
 
+.lane--d .bus-marker__pill {
+  background: var(--dir-d);
+}
+
+.lane--e .bus-marker__pill {
+  background: var(--dir-e);
+}
+
 .bus-marker__emoji {
   font-size: 15px;
   line-height: 1;
   transform: translateZ(0);
 }
 
-.lane--a .bus-marker__emoji {
+.lane--a .bus-marker__emoji,
+.lane--d .bus-marker__emoji {
   transform: rotate(180deg);
 }
 
@@ -432,17 +477,35 @@ a:hover {
   border-right: 5px solid transparent;
 }
 
-.lane--c .bus-marker__tip {
+.lane--c .bus-marker__tip,
+.lane--e .bus-marker__tip {
   border-top: 6px solid var(--dir-c);
   border-bottom: none;
   margin-bottom: 1px;
 }
 
-.lane--a .bus-marker__tip {
+.lane--c .bus-marker__tip {
+  border-top-color: var(--dir-c);
+}
+
+.lane--e .bus-marker__tip {
+  border-top-color: var(--dir-e);
+}
+
+.lane--a .bus-marker__tip,
+.lane--d .bus-marker__tip {
   border-bottom: 6px solid var(--dir-a);
   border-top: none;
   margin-top: 1px;
   order: 3;
+}
+
+.lane--a .bus-marker__tip {
+  border-bottom-color: var(--dir-a);
+}
+
+.lane--d .bus-marker__tip {
+  border-bottom-color: var(--dir-d);
 }
 
 /* tooltip on hover / forced via .show-all */
@@ -466,7 +529,8 @@ a:hover {
   box-shadow: var(--shadow);
 }
 
-.lane--c .bus-marker__tooltip {
+.lane--c .bus-marker__tooltip,
+.lane--e .bus-marker__tooltip {
   top: auto;
   bottom: calc(100% + 6px);
 }
@@ -566,6 +630,14 @@ a:hover {
 
 .running-item__fill--c {
   background: var(--dir-c);
+}
+
+.running-item__fill--d {
+  background: var(--dir-d);
+}
+
+.running-item__fill--e {
+  background: var(--dir-e);
 }
 
 .running-item__fill--rainbow {
@@ -750,19 +822,9 @@ a:hover {
 
 @media (min-width: 900px) {
   .trip-columns {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 20px;
     align-items: start;
-  }
-  #tripColumnA .trip-item {
-    text-align: left;
-  }
-  #tripColumnC .trip-item {
-    text-align: right;
-    align-items: flex-end;
-  }
-  #tripColumnC .trip-item__row1 {
-    justify-content: flex-end;
   }
 }
 

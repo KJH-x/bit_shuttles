@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "../schedule-data.js";
+import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips } from "../schedule-data.js";
 import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel } from "../lib/schedule.js";
 
 const ROUTE_IDS = new Set(ROUTES.map((r) => r.id));
@@ -33,7 +33,35 @@ test("schedule data: route a and c share the bidirectional corridor (良乡⇄�
   const byRoute = (id) => TRIPS.filter((t) => t.route === id);
   assert.ok(byRoute("a").length >= 20, "route a (良乡→中关村) has trips");
   assert.ok(byRoute("c").length >= 20, "route c (中关村→良乡) has trips");
-  assert.equal(ROUTES.length, 2, "回龙观 route removed");
+  assert.equal(ROUTES.length, 4, "回龙观 removed, 西山 routes d/e added");
+  assert.ok(ROUTE_IDS.has("d"), "route d (中关村→西山)");
+  assert.ok(ROUTE_IDS.has("e"), "route e (西山→中关村)");
+});
+
+test("weekend schedule data: valid trips on known routes", () => {
+  const ids = TRIPS_WEEKEND.map((t) => t.id);
+  assert.equal(new Set(ids).size, ids.length, "weekend trip ids must be unique");
+  for (const t of TRIPS_WEEKEND) {
+    assert.ok(ROUTE_IDS.has(t.route), `unknown route ${t.route} on ${t.id}`);
+    assert.match(t.dep, /^([01]\d|2[0-3]):[0-5]\d$/, `bad dep ${t.dep} on ${t.id}`);
+    assert.equal(typeof t.rainbow, "boolean", `rainbow must be boolean on ${t.id}`);
+    assert.match(t.price, /^¥\d+\.\d{2}$/, `bad price ${t.price} on ${t.id}`);
+  }
+  const dTrips = TRIPS_WEEKEND.filter((t) => t.route === "d");
+  const eTrips = TRIPS_WEEKEND.filter((t) => t.route === "e");
+  assert.equal(dTrips.length, 1, "weekend 中关村→西山 has 1 trip (08:00)");
+  assert.equal(eTrips.length, 1, "weekend 西山→中关村 has 1 trip (16:30)");
+});
+
+test("isWeekend / activeTrips: weekend vs weekday switching", () => {
+  const sat = new Date(2026, 8, 5, 12, 0, 0);
+  const sun = new Date(2026, 8, 6, 12, 0, 0);
+  const wed = new Date(2026, 8, 2, 12, 0, 0);
+  assert.equal(isWeekend(sat), true);
+  assert.equal(isWeekend(sun), true);
+  assert.equal(isWeekend(wed), false);
+  assert.equal(activeTrips(sat), TRIPS_WEEKEND);
+  assert.equal(activeTrips(wed), TRIPS);
 });
 
 test("schedule data: no 回龙观 trips remain", () => {
@@ -124,7 +152,7 @@ test("formatDurationLabel renders minute/hour labels", () => {
   assert.equal(formatDurationLabel(30 * 60000), "30 分钟");
   assert.equal(formatDurationLabel(90 * 60000), "1 小时 30 分钟");
   assert.equal(formatDurationLabel(120 * 60000), "2 小时");
-  assert.equal(formatDurationLabel(15 * 1000), "即将");
+  assert.equal(formatDurationLabel(15 * 1000), "不足 1 分钟");
 });
 
 test("formatClock / formatHM pad to HH:MM(:SS)", () => {
@@ -172,10 +200,12 @@ test("ticketInfo: regular trips open T-1h, countdown before", () => {
   assert.equal(closed.phase, "closed");
 });
 
-test("departureLabel: countdown before, 已发车 within T+10, hidden label", () => {
+test("departureLabel: countdown before, 即将发车 within 1min, 已发车 within T+10, hidden label", () => {
   const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
   const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs };
   assert.match(departureLabel(trip, depMs - 30 * 60000), /30 分钟后/);
+  assert.equal(departureLabel(trip, depMs - 59 * 1000), "即将发车");
+  assert.equal(departureLabel(trip, depMs - 1000), "即将发车");
   assert.equal(departureLabel(trip, depMs + 2 * 60000), "已发车 · 可能还在上车点");
   assert.equal(departureLabel(trip, depMs + 6 * 60000), "已发车");
   assert.equal(departureLabel(trip, depMs + 9 * 60000), "已发车");

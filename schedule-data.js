@@ -2,11 +2,13 @@ export const DURATION_MIN = 60;
 
 export const DURATION_BY_ROUTE = {};
 
-export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260901-7";
+export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260902-3";
 
 export const ROUTES = [
   { id: "a", label: "良乡 → 中关村" },
-  { id: "c", label: "中关村 → 良乡" }
+  { id: "c", label: "中关村 → 良乡" },
+  { id: "d", label: "中关村 → 西山" },
+  { id: "e", label: "西山 → 中关村" }
 ];
 
 export const TRIPS = [
@@ -58,6 +60,52 @@ export const TRIPS = [
   { id: "c22", route: "c", dep: "22:30", price: "¥0.00",  rainbow: false },
   { id: "c23", route: "c", dep: "22:50", price: "¥0.00",  rainbow: false }
 ];
+
+export const TRIPS_WEEKEND = [
+  { id: "wa1",  route: "a", dep: "06:30", price: "¥10.00", rainbow: false },
+  { id: "wa2",  route: "a", dep: "07:30", price: "¥10.00", rainbow: false },
+  { id: "wa3",  route: "a", dep: "08:00", price: "¥10.00", rainbow: false },
+  { id: "wa4",  route: "a", dep: "08:30", price: "¥10.00", rainbow: false },
+  { id: "wa5",  route: "a", dep: "09:00", price: "¥10.00", rainbow: false },
+  { id: "wa6",  route: "a", dep: "10:10", price: "¥10.00", rainbow: false },
+  { id: "wa7",  route: "a", dep: "11:30", price: "¥10.00", rainbow: false },
+  { id: "wa8",  route: "a", dep: "12:00", price: "¥10.00", rainbow: false },
+  { id: "wa9",  route: "a", dep: "12:40", price: "¥10.00", rainbow: false },
+  { id: "wa10", route: "a", dep: "14:30", price: "¥10.00", rainbow: false },
+  { id: "wa11", route: "a", dep: "16:10", price: "¥10.00", rainbow: false },
+  { id: "wa12", route: "a", dep: "17:00", price: "¥10.00", rainbow: false },
+  { id: "wa13", route: "a", dep: "18:30", price: "¥10.00", rainbow: false },
+  { id: "wa14", route: "a", dep: "20:30", price: "¥10.00", rainbow: false },
+  { id: "wa15", route: "a", dep: "21:10", price: "¥10.00", rainbow: false },
+
+  { id: "wc1",  route: "c", dep: "07:30", price: "¥10.00", rainbow: false },
+  { id: "wc2",  route: "c", dep: "08:10", price: "¥10.00", rainbow: false },
+  { id: "wc3",  route: "c", dep: "09:00", price: "¥10.00", rainbow: false },
+  { id: "wc4",  route: "c", dep: "10:10", price: "¥10.00", rainbow: false },
+  { id: "wc5",  route: "c", dep: "12:00", price: "¥10.00", rainbow: false },
+  { id: "wc6",  route: "c", dep: "12:40", price: "¥10.00", rainbow: false },
+  { id: "wc7",  route: "c", dep: "13:30", price: "¥10.00", rainbow: false },
+  { id: "wc8",  route: "c", dep: "15:00", price: "¥10.00", rainbow: false },
+  { id: "wc9",  route: "c", dep: "16:10", price: "¥10.00", rainbow: false },
+  { id: "wc10", route: "c", dep: "17:00", price: "¥10.00", rainbow: false },
+  { id: "wc11", route: "c", dep: "18:00", price: "¥10.00", rainbow: false },
+  { id: "wc12", route: "c", dep: "18:30", price: "¥10.00", rainbow: false },
+  { id: "wc13", route: "c", dep: "19:00", price: "¥10.00", rainbow: false },
+  { id: "wc14", route: "c", dep: "20:00", price: "¥10.00", rainbow: false },
+  { id: "wc15", route: "c", dep: "21:10", price: "¥10.00", rainbow: false },
+
+  { id: "wd1", route: "d", dep: "08:00", price: "¥0.00",  rainbow: false },
+  { id: "we1", route: "e", dep: "16:30", price: "¥0.00",  rainbow: false }
+];
+
+export function isWeekend(date = new Date()) {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+export function activeTrips(date = new Date()) {
+  return isWeekend(date) ? TRIPS_WEEKEND : TRIPS;
+}
 
 
 
