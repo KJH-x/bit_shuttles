@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-6";
+import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-7";
 import {
   formatClock,
   formatHM,
@@ -6,8 +6,8 @@ import {
   computeAll,
   ticketInfo,
   departureLabel
-} from "./lib/schedule.js?v=20260901-6";
-import { now, syncClock } from "./lib/time.js?v=20260901-6";
+} from "./lib/schedule.js?v=20260901-7";
+import { now, syncClock } from "./lib/time.js?v=20260901-7";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡" };
@@ -307,6 +307,16 @@ function bindChips() {
   });
 }
 
+/* ===== PWA: register service worker for install + offline ===== */
+function registerSW() {
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch((err) => {
+      console.warn("SW registration failed:", err);
+    });
+  });
+}
+
 /* ===== Tick loop ===== */
 function tick() {
   const n = now();
@@ -325,6 +335,7 @@ bindTheme();
 bindChips();
 bindDetailToggle();
 initClockSync();
+registerSW();
 tick();
 setInterval(tick, 1000);
 

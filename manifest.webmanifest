@@ -1,0 +1,20 @@
+{
+  "name": "良乡 ⇄ 中关村 · 校园班车",
+  "short_name": "校园班车",
+  "description": "北京理工大学良乡 ⇄ 中关村工作日校园班车时刻表 — 实时运行进度、购票倒计时与即将开行班次。离线可用。",
+  "id": "bitbus",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fefce8",
+  "theme_color": "#d97706",
+  "icons": [
+    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "shortcuts": [
+    { "name": "即将开行", "url": "/?view=upcoming" },
+    { "name": "正在运行", "url": "/?view=running" }
+  ]
+}
