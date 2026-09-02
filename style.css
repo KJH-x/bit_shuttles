@@ -828,12 +828,6 @@ a:hover {
   }
 }
 
-@media (min-width: 1320px) {
-  .trip-columns {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
 /* ===== Trip list ===== */
 .trip-list {
   list-style: none;
