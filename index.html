@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>良乡 ⇄ 中关村 · 校园班车</title>
-  <meta name="description" content="北京理工大学良乡 ⇄ 中关村工作日校园班车时刻表 — 实时运行进度、购票倒计时与即将开行班次">
+  <meta name="description" content="北京理工大学良乡 ⇄ 中关村（含西山）工作日与周末校园班车时刻表 — 实时运行进度、购票倒计时与即将开行班次">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/favicon-32.png" type="image/png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -12,14 +12,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260901-7">
+  <link rel="stylesheet" href="style.css?v=20260902-2">
 </head>
 <body>
   <a href="#main-content" class="skip-link">跳转到主内容</a>
 
   <header class="site-header">
     <div class="hero">
-      <p class="eyebrow">BIT · Campus Shuttle · 工作日</p>
+      <p class="eyebrow">BIT · Campus Shuttle <span class="badge" id="scheduleBadge">工作日</span></p>
       <div class="hero__row">
         <h1>良乡 ⇄ 中关村 校园班车</h1>
         <div class="clock-wrap">
@@ -49,13 +49,23 @@
       </div>
 
       <div class="route-track" id="trackMain">
-        <div class="route-track__lanes">
-          <div class="route-track__bar" aria-hidden="true">
-            <span class="route-track__end route-track__end--left">良乡</span>
-            <span class="route-track__end route-track__end--right">中关村</span>
+        <div class="route-track__corridors" id="corridors">
+          <div class="route-corridor" data-corridor="main" aria-label="良乡 ⇄ 中关村">
+            <div class="route-track__bar" aria-hidden="true">
+              <span class="route-track__end route-track__end--left">良乡</span>
+              <span class="route-track__end route-track__end--right">中关村</span>
+            </div>
+            <div class="lane lane--c" data-lane="c" role="img" aria-label="中关村 → 良乡"></div>
+            <div class="lane lane--a" data-lane="a" role="img" aria-label="良乡 → 中关村"></div>
           </div>
-          <div class="lane lane--c" id="laneC" role="img" aria-label="中关村 → 良乡"></div>
-          <div class="lane lane--a" id="laneA" role="img" aria-label="良乡 → 中关村"></div>
+          <div class="route-corridor" data-corridor="xishan" aria-label="中关村 ⇄ 西山">
+            <div class="route-track__bar" aria-hidden="true">
+              <span class="route-track__end route-track__end--left">中关村</span>
+              <span class="route-track__end route-track__end--right">西山</span>
+            </div>
+            <div class="lane lane--e" data-lane="e" role="img" aria-label="西山 → 中关村"></div>
+            <div class="lane lane--d" data-lane="d" role="img" aria-label="中关村 → 西山"></div>
+          </div>
         </div>
         <p class="route-track__empty" id="trackMainEmpty">当前没有班车在运行</p>
       </div>
@@ -97,6 +107,8 @@
         <button class="filter-chip filter-chip--active" data-route="all" aria-pressed="true" type="button">全部</button>
         <button class="filter-chip" data-route="a" aria-pressed="false" type="button">良乡 → 中关村</button>
         <button class="filter-chip" data-route="c" aria-pressed="false" type="button">中关村 → 良乡</button>
+        <button class="filter-chip" data-route="d" aria-pressed="false" type="button">中关村 → 西山</button>
+        <button class="filter-chip" data-route="e" aria-pressed="false" type="button">西山 → 中关村</button>
         <button class="filter-chip filter-chip--norainbow" data-route="norainbow" aria-pressed="false" type="button">除彩虹巴士</button>
       </div>
       <p id="resultsStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -109,6 +121,14 @@
           <h3 class="trip-column__title" id="colTitleC">中关村出发 → 良乡</h3>
           <ul class="trip-list" id="tripListC" aria-label="中关村出发的班次"></ul>
         </section>
+        <section class="trip-column" id="tripColumnD" aria-labelledby="colTitleD">
+          <h3 class="trip-column__title" id="colTitleD">中关村出发 → 西山</h3>
+          <ul class="trip-list" id="tripListD" aria-label="中关村出发到西山的班次"></ul>
+        </section>
+        <section class="trip-column" id="tripColumnE" aria-labelledby="colTitleE">
+          <h3 class="trip-column__title" id="colTitleE">西山出发 → 中关村</h3>
+          <ul class="trip-list" id="tripListE" aria-label="西山出发的班次"></ul>
+        </section>
       </div>
       <div class="empty-state" id="upcomingEmpty" hidden>
         <h3>今天没有更多班次了</h3>
@@ -118,7 +138,7 @@
   </main>
 
   <footer class="site-footer">
-    <p>数据：工作日时刻表 · 纯静态页面 · 浏览器本地实时推算（运行耗时当前按 1 小时估算，待更新）</p>
+    <p>数据：工作日与周末时刻表 · 纯静态页面 · 浏览器本地实时推算（运行耗时当前按 1 小时估算，待更新）</p>
     <p>彩虹班车全周可约 🌈 · 免费班次全天可约 · 一般班次开售即抢（开售 5 分钟内售罄）</p>
   </footer>
 
@@ -128,7 +148,7 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260901-7" type="module"></script></body>
+  <script src="app.js?v=20260902-2" type="module"></script></body>
 </html>
 
 

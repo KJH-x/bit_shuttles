@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES } from "./schedule-data.js?v=20260901-7";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips } from "./schedule-data.js?v=20260902-2";
 import {
   formatClock,
   formatHM,
@@ -6,21 +6,29 @@ import {
   computeAll,
   ticketInfo,
   departureLabel
-} from "./lib/schedule.js?v=20260901-7";
-import { now, syncClock } from "./lib/time.js?v=20260901-7";
+} from "./lib/schedule.js?v=20260902-2";
+import { now, syncClock } from "./lib/time.js?v=20260902-2";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260902-2";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-2";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
-const ROUTE_DEST = { a: "中关村", c: "良乡" };
+const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
+const CORRIDORS = [
+  { id: "main", label: "良乡 ⇄ 中关村", fwd: "a", rev: "c", left: "良乡", right: "中关村" },
+  { id: "xishan", label: "中关村 ⇄ 西山", fwd: "d", rev: "e", left: "中关村", right: "西山" }
+];
+const FWD = new Set(CORRIDORS.map((c) => c.fwd));
+const fwdTrip = (t) => FWD.has(t.route);
 
 const dom = {
   clock: document.getElementById("liveClock"),
+  scheduleBadge: document.getElementById("scheduleBadge"),
   nextStatus: document.getElementById("nextStatus"),
   resultsStatus: document.getElementById("resultsStatus"),
   themeSelect: document.getElementById("themeSelect"),
   routeChips: document.getElementById("routeChips"),
   trackMain: document.getElementById("trackMain"),
-  laneA: document.getElementById("laneA"),
-  laneC: document.getElementById("laneC"),
+  corridorContainer: document.getElementById("corridors"),
   trackMainEmpty: document.getElementById("trackMainEmpty"),
   runningDetail: document.getElementById("runningDetail"),
   detailToggle: document.getElementById("detailToggle"),
@@ -28,8 +36,12 @@ const dom = {
   runningHint: document.getElementById("runningHint"),
   tripColumnA: document.getElementById("tripColumnA"),
   tripColumnC: document.getElementById("tripColumnC"),
+  tripColumnD: document.getElementById("tripColumnD"),
+  tripColumnE: document.getElementById("tripColumnE"),
   tripListA: document.getElementById("tripListA"),
   tripListC: document.getElementById("tripListC"),
+  tripListD: document.getElementById("tripListD"),
+  tripListE: document.getElementById("tripListE"),
   upcomingEmpty: document.getElementById("upcomingEmpty")
 };
 
@@ -40,6 +52,12 @@ const state = {
   runningSig: "",
   upcomingSig: ""
 };
+
+const dayKind = (date) => (isWeekend(date) ? "周末" : "工作日");
+
+function activeTripsForNow() {
+  return activeTrips(new Date(now()));
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -77,9 +95,14 @@ async function initClockSync() {
   }, 15 * 60 * 1000);
 }
 
-/* ===== Running track: two lanes (a: 良乡→中关村 left→right, c: 中关村→良乡 right→left) ===== */
+/* ===== Running track: per-corridor lanes (main 良乡⇄中关村 + 西山 中关村⇄西山) ===== */
+function laneFor(trip) {
+  return dom.corridorContainer.querySelector(`[data-lane="${trip.route}"]`);
+}
+
 function makeBusMarker(trip, now) {
-  const lane = trip.route === "a" ? dom.laneA : dom.laneC;
+  const lane = laneFor(trip);
+  if (!lane) return null;
   const el = document.createElement("div");
   el.className = "bus-marker";
   el.dataset.id = trip.id;
@@ -98,7 +121,7 @@ function makeBusMarker(trip, now) {
 
 function updateBusMarker(el, trip, now) {
   const p = trip.progress * 100;
-  const left = trip.route === "a" ? p : 100 - p;
+  const left = fwdTrip(trip) ? p : 100 - p;
   el.style.left = `${left}%`;
   const remaining = trip.arrMs - now;
   const dest = ROUTE_DEST[trip.route];
@@ -110,28 +133,36 @@ function updateBusMarker(el, trip, now) {
 
 function renderTrack(all, now) {
   const running = all.filter((t) => t.status === "running");
-  const aRunning = running.filter((t) => t.route === "a");
-  const cRunning = running.filter((t) => t.route === "c");
+  const anyRunning = running.length > 0;
 
-  for (const [lane, trips] of [[dom.laneA, aRunning], [dom.laneC, cRunning]]) {
-    const current = [...lane.querySelectorAll(".bus-marker")];
-    const currentIds = new Set(current.map((el) => el.dataset.id));
-    const wantIds = new Set(trips.map((t) => t.id));
-    for (const el of current) {
-      if (!wantIds.has(el.dataset.id)) el.remove();
-    }
-    for (const trip of trips) {
-      if (!currentIds.has(trip.id)) {
-        makeBusMarker(trip, now);
-      } else {
-        const el = lane.querySelector(`.bus-marker[data-id="${trip.id}"]`);
-        updateBusMarker(el, trip, now);
+  for (const corridor of CORRIDORS) {
+    const block = dom.corridorContainer.querySelector(`[data-corridor="${corridor.id}"]`);
+    if (!block) continue;
+    const corridorTrips = running.filter((t) => t.route === corridor.fwd || t.route === corridor.rev);
+    const hasBus = corridorTrips.length > 0;
+
+    for (const rid of [corridor.fwd, corridor.rev]) {
+      const lane = block.querySelector(`[data-lane="${rid}"]`);
+      const trips = corridorTrips.filter((t) => t.route === rid);
+      const current = [...lane.querySelectorAll(".bus-marker")];
+      const currentIds = new Set(current.map((el) => el.dataset.id));
+      const wantIds = new Set(trips.map((t) => t.id));
+      for (const el of current) {
+        if (!wantIds.has(el.dataset.id)) el.remove();
       }
+      for (const trip of trips) {
+        if (!currentIds.has(trip.id)) {
+          makeBusMarker(trip, now);
+        } else {
+          const el = lane.querySelector(`.bus-marker[data-id="${trip.id}"]`);
+          updateBusMarker(el, trip, now);
+        }
+      }
+      lane.hidden = trips.length === 0;
     }
+    block.hidden = !hasBus;
   }
-  dom.trackMainEmpty.hidden = running.length > 0;
-  dom.laneA.hidden = aRunning.length === 0;
-  dom.laneC.hidden = cRunning.length === 0;
+  dom.trackMainEmpty.hidden = anyRunning;
 }
 
 /* ===== Detail toggle: force show-all + expand per-trip list ===== */
@@ -266,15 +297,21 @@ function renderList(ul, list, now, highlightNext) {
 
 function renderUpcoming(all, now) {
   const list = filterUpcoming(all, now);
-  const listA = list.filter((t) => t.route === "a");
-  const listC = list.filter((t) => t.route === "c");
-  const total = listA.length + listC.length;
+  const routes = ["a", "c", "d", "e"];
+  const byRoute = Object.fromEntries(routes.map((id) => [id, []]));
+  for (const t of list) {
+    if (byRoute[t.route]) byRoute[t.route].push(t);
+  }
+  const total = list.length;
   dom.upcomingEmpty.hidden = total > 0;
   dom.resultsStatus.textContent = `即将开行 ${total} 个班次`;
-  dom.tripColumnA.hidden = listA.length === 0;
-  dom.tripColumnC.hidden = listC.length === 0;
-  renderList(dom.tripListA, listA, now, true);
-  renderList(dom.tripListC, listC, now, true);
+  const columns = { a: dom.tripColumnA, c: dom.tripColumnC, d: dom.tripColumnD, e: dom.tripColumnE };
+  const lists = { a: dom.tripListA, c: dom.tripListC, d: dom.tripListD, e: dom.tripListE };
+  for (const id of routes) {
+    const trips = byRoute[id];
+    columns[id].hidden = trips.length === 0;
+    renderList(lists[id], trips, now, true);
+  }
 }
 
 /* ===== Status line ===== */
@@ -303,7 +340,7 @@ function bindChips() {
       c.classList.toggle("filter-chip--active", active);
       c.setAttribute("aria-pressed", String(active));
     });
-    renderUpcoming(computeAll(TRIPS, now(), DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), now());
+    renderUpcoming(computeAll(activeTripsForNow(), now(), DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), now());
   });
 }
 
@@ -320,10 +357,11 @@ function registerSW() {
 /* ===== Tick loop ===== */
 function tick() {
   const n = now();
-  const all = computeAll(TRIPS, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
+  const all = computeAll(activeTripsForNow(), n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
   const nowDate = new Date(n);
   dom.clock.textContent = formatClock(nowDate);
   dom.clock.setAttribute("datetime", nowDate.toISOString());
+  dom.scheduleBadge.textContent = dayKind(nowDate);
   renderTrack(all, n);
   renderRunningList(all, n);
   renderUpcoming(all, n);
@@ -336,6 +374,11 @@ bindChips();
 bindDetailToggle();
 initClockSync();
 registerSW();
+if (initQQBrowserGuide()) {
+  // QQ 内置浏览器提示优先，避免与 PWA 安装引导同时弹出
+} else {
+  initInstallGuide();
+}
 tick();
 setInterval(tick, 1000);
 

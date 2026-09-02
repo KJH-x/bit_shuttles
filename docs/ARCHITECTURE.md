@@ -80,10 +80,12 @@ site-footer：数据说明
 | v1.3 | 2026-09-01 | 良乡→中关村耗时表（邻近插值）；耗时 >1h 一律封顶 60min；高德实时路线正/反向按钮；灰色免责声明；移动端价格/时间独立行 | `3930101` |
 | v1.4 | 2026-09-01 | 移动端 7 项修复：免费 tag 去重（ticket 只写「全天可约」）、去掉 ↔、trip-item 三行布局、Amap 按钮同行省略正反向词、移除顶部说明、展开按钮移到轨道下方、删除同步徽标 | `7c21463` |
 | v1.5 | 2026-09-02 | 桌面两列（按方向）；桌面 QR 气泡（静态打包二维码）；运行图收敛为中间单圆角矩形（两 lane 透明仅留车辆标）；T+10 才隐藏班次（T~T+5「可能还在上车点」、T+5~T+10「已发车」） | 当前 |
+| v1.6 | 2026-09-02 | 周末时刻表（`TRIPS_WEEKEND`，32 班次，含中关村⇄西山 d/e 两条新线路，免费）；`isWeekend`/`activeTrips` 按日期自动切换；运行图改为按走廊（良乡⇄中关村 + 中关村⇄西山）分组渲染；即将开行按 4 条线路分列；修倒计时 <1 分钟误拼「即将后」→「即将发车」；`formatDurationLabel` 亚分钟改为「不足 1 分钟」 | 当前 |
+| v1.7 | 2026-09-02 | iOS Safari 非 PWA 安装引导（`lib/install-guide.js`，load 后 5s 弹出：长按地址栏→分享→添加到主屏幕，默认作为网页App打开；localStorage 忽略标记）；QQ 内置浏览器提示（`lib/qq-guide.js`，UA 判定 Android/iOS，5s 后提示换系统浏览器，可「知道了」/「复制链接」）；两者互斥（QQ 优先） | 当前 |
 
 ## 7. 发版 Checklist（防坑）
 
 1. 改数据/样式/逻辑后：`node --test tests/` 全绿。
 2. 本地 `python -m http.server 8877`，用浏览器分别验证 ≥900px（两列+QR）与 ≤768px（单列、QR 隐藏、三行卡片）。
-3. 统一 bump 版本号：`index.html` 的 `style.css?v=` 与 `app.js?v=`、`app.js` 内部 import、`schedule-data.js` 的 re-export，四处同步改为 `20260901-N+1`（否则可能吃到 zone 层旧缓存）。
+3. 统一 bump 版本号：`index.html` 的 `style.css?v=` 与 `app.js?v=`、`app.js` 内部 import、`schedule-data.js` 的 re-export，四处同步改为 `20260902-N+1`（否则可能吃到 zone 层旧缓存）。
 4. commit + push `main` → CF Pages 自动构建（无构建命令，根目录部署）。token 无 Zone 权限，无法用 API 查部署状态，直接 curl 验证 `https://bitbus.nslc.top/` 返回 200 且含新版本号。
