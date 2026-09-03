@@ -99,10 +99,9 @@ function bindTheme() {
   });
 }
 
-/* ===== View switch: main ⇄ FIDS (/FIDS) ===== */
+/* ===== View switch: main ⇄ FIDS (#/FIDS) ===== */
 function isFidsPath() {
-  const p = location.pathname.replace(/\/+$/, "").toLowerCase();
-  return p === "/fids";
+  return location.hash.replace(/^#\/?/, "").toLowerCase() === "fids";
 }
 
 function applyView() {
@@ -119,14 +118,14 @@ function applyView() {
 function bindViewSwitch() {
   for (const btn of dom.viewSwitchBtns) {
     btn.addEventListener("click", () => {
-      const target = btn.dataset.view === "fids" ? "/FIDS" : "/";
-      if (location.pathname === target) return;
-      history.pushState({}, "", target);
+      const target = btn.dataset.view === "fids" ? "#/FIDS" : "#/";
+      if (location.hash === target || (target === "#/" && location.hash === "")) return;
+      location.hash = target;
       applyView();
       tick();
     });
   }
-  window.addEventListener("popstate", () => {
+  window.addEventListener("hashchange", () => {
     applyView();
     tick();
   });
