@@ -198,6 +198,39 @@ a:hover {
   flex-wrap: wrap;
 }
 
+/* ===== View switch (标准屏 / FIDS) ===== */
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.view-switch__btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.view-switch__btn--active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.view-switch__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .hero h1 {
   font-size: 2.5rem;
   font-weight: 800;
@@ -311,6 +344,15 @@ a:hover {
   margin-bottom: 20px;
 }
 
+/* 运行面板标题双下 margin（4px+8px）清零，不影响 PIDS/即将开行 */
+section[aria-labelledby="runningTitle"] .panel__head {
+  margin-bottom: 0;
+}
+
+#runningTitle {
+  margin-bottom: 0;
+}
+
 /* ===== Buttons (global, aligned with sibling sites) ===== */
 .btn {
   display: inline-flex;
@@ -391,6 +433,21 @@ a:hover {
   font-size: .8rem;
 }
 
+.route-track__checkpoint {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--accent-light);
+  color: var(--tag-text);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 2;
+  opacity: .92;
+}
+
 /* Each lane: a horizontal progress line with absolute-positioned bus markers.
    Background hidden to keep a single central rounded rectangle; bus markers remain. */
 .lane {
@@ -422,6 +479,14 @@ a:hover {
   z-index: 3;
   will-change: left;
   cursor: default;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bus-marker::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
 }
 
 .bus-marker__pill {
@@ -536,12 +601,14 @@ a:hover {
 }
 
 .bus-marker:hover .bus-marker__tooltip,
+.bus-marker--active .bus-marker__tooltip,
 .route-track.show-all .bus-marker__tooltip {
   opacity: 1;
   visibility: visible;
 }
 
-.route-track.show-all .bus-marker__time {
+.route-track.show-all .bus-marker__time,
+.bus-marker--active .bus-marker__time {
   display: inline;
 }
 
@@ -574,6 +641,8 @@ a:hover {
 }
 
 .running-item {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -581,6 +650,46 @@ a:hover {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface-2);
+}
+
+.running-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: var(--pct, 0%);
+  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.running-item[data-route="a"]::before {
+  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+}
+
+.running-item[data-route="c"]::before {
+  background: color-mix(in srgb, var(--dir-c) 18%, transparent);
+}
+
+.running-item[data-route="d"]::before {
+  background: color-mix(in srgb, var(--dir-d) 18%, transparent);
+}
+
+.running-item[data-route="e"]::before {
+  background: color-mix(in srgb, var(--dir-e) 18%, transparent);
+}
+
+.running-item[data-rainbow="true"]::before {
+  background: linear-gradient(90deg,
+    rgba(248, 113, 113, .32),
+    rgba(251, 191, 36, .32),
+    rgba(74, 222, 128, .32),
+    rgba(96, 165, 250, .32),
+    rgba(167, 139, 250, .32));
+}
+
+.running-item > * {
+  position: relative;
+  z-index: 1;
 }
 
 .running-item__head {
@@ -609,41 +718,6 @@ a:hover {
   font-variant-numeric: tabular-nums;
 }
 
-.running-item__bar {
-  height: 10px;
-  background: var(--track-bg);
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid var(--track-bound);
-}
-
-.running-item__fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--track-fill);
-  transition: width .5s linear;
-}
-
-.running-item__fill--a {
-  background: var(--dir-a);
-}
-
-.running-item__fill--c {
-  background: var(--dir-c);
-}
-
-.running-item__fill--d {
-  background: var(--dir-d);
-}
-
-.running-item__fill--e {
-  background: var(--dir-e);
-}
-
-.running-item__fill--rainbow {
-  background: linear-gradient(90deg, #f87171, #fbbf24, #4ade80, #60a5fa, #a78bfa);
-}
-
 .running-item__foot {
   display: flex;
   justify-content: space-between;
@@ -654,11 +728,14 @@ a:hover {
 
 /* ===== Amap real-time links ===== */
 .amap-links {
+  position: relative;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border);
 }
 
 .amap-links__label {
@@ -687,14 +764,20 @@ a:hover {
 /* ===== QR bubble (desktop only; static QR for Amap links) ===== */
 .amap-qr {
   display: none;
-  flex-basis: 100%;
-  position: relative;
-  margin-top: 6px;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 60;
   padding: 16px;
   border-radius: 14px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+}
+
+.amap-qr--open {
+  display: block;
 }
 
 .amap-qr__tip {
@@ -744,18 +827,240 @@ a:hover {
   color: var(--text);
 }
 
-@media (min-width: 900px) {
-  .amap-qr {
-    display: block;
-  }
-}
-
 /* ===== Panel note (gray small print) ===== */
 .panel__note {
   margin-top: 14px;
   font-size: .75rem;
   color: var(--muted);
   line-height: 1.5;
+}
+
+/* ===== Running item checkpoint line ===== */
+.running-item__cp {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: .72rem;
+  color: var(--muted);
+}
+
+.running-item__cp-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  opacity: .45;
+  transition: opacity .3s ease;
+}
+
+.running-item__cp-item small {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.running-item__cp-item.is-passed {
+  opacity: 1;
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.running-item__cp-arrow {
+  color: var(--muted);
+}
+
+/* ===== FIDS view ===== */
+.fids-shell.app-shell {
+  padding-top: 20px;
+}
+
+.fids-table {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  font-size: .88rem;
+}
+
+.fids-table__head,
+.fids-row {
+  display: grid;
+  grid-template-columns: 24px 24px 1fr 72px 120px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.fids-row__arrow {
+  color: var(--success);
+  font-weight: 800;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.fids-row__arrow--l {
+  text-align: right;
+}
+
+.fids-row__arrow--r {
+  text-align: left;
+}
+
+.fids-table__head {
+  background: var(--surface-2);
+  font-weight: 700;
+  color: var(--muted);
+  padding: 8px 14px;
+  font-size: .78rem;
+}
+
+.fids-row {
+  position: relative;
+  overflow: hidden;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.fids-row--pre {
+  background: var(--surface);
+}
+
+.fids-row--run {
+  background: var(--surface-2);
+}
+
+.fids-row--run::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: var(--pct, 0%);
+  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fids-row--run[data-route="a"]::before {
+  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+}
+
+.fids-row--run[data-route="c"]::before {
+  background: color-mix(in srgb, var(--dir-c) 18%, transparent);
+}
+
+.fids-row--run[data-route="d"]::before {
+  background: color-mix(in srgb, var(--dir-d) 18%, transparent);
+}
+
+.fids-row--run[data-route="e"]::before {
+  background: color-mix(in srgb, var(--dir-e) 18%, transparent);
+}
+
+.fids-row--run[data-rainbow="true"]::before {
+  background: linear-gradient(90deg,
+    rgba(248, 113, 113, .32),
+    rgba(251, 191, 36, .32),
+    rgba(74, 222, 128, .32),
+    rgba(96, 165, 250, .32),
+    rgba(167, 139, 250, .32));
+}
+
+.fids-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+.fids-row--done {
+  background: var(--surface-2);
+  opacity: .8;
+}
+
+.fids-row__dir {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fids-row__dep {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.fids-row__loc {
+  font-size: .8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fids-st {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.fids-st--wait {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.fids-st--urge {
+  background: var(--accent-light);
+  color: var(--primary-hover);
+  border: 1px solid var(--primary);
+}
+
+.fids-st--dep {
+  background: var(--dir-c);
+  color: #fff;
+}
+
+.fids-st--arr {
+  background: var(--success);
+  color: #fff;
+}
+
+.fids-legend {
+  margin-top: 12px;
+  font-size: .75rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fids-legend .fids-st {
+  font-size: .7rem;
+  padding: 1px 8px;
+}
+
+.fids-bg {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: .7rem;
+  border: 1px solid var(--border);
+}
+
+.fids-bg--pre {
+  background: var(--surface);
+}
+
+.fids-bg--run {
+  background: var(--dir-c-soft);
+}
+
+.fids-bg--done {
+  background: var(--surface-2);
 }
 
 /* ===== Filter chips ===== */
@@ -1029,5 +1334,64 @@ a:hover {
   }
   .trip-item__countdown {
     text-align: left;
+  }
+
+  /* PIDS 窄屏：外框去两侧边距 + 直角 */
+  .fids-shell {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .fids-shell .panel {
+    margin-left: 0;
+    margin-right: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .fids-table {
+    border-radius: 0;
+  }
+
+  /* PIDS 窄屏紧凑：左列=箭头（占两行），右列=时间在上/方向在下；状态+位置第三行两列 */
+  .fids-table__head {
+    display: none;
+  }
+  .fids-row {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "arrow dep status"
+      "arrow dir loc";
+  }
+  .fids-row__arrow--l,
+  .fids-row__arrow--r {
+    grid-area: arrow;
+    text-align: center;
+    justify-self: start;
+  }
+  .fids-row__dir {
+    grid-area: dir;
+  }
+  .fids-row__dep {
+    grid-area: dep;
+  }
+  .fids-st {
+    grid-area: status;
+    justify-self: end;
+  }
+  .fids-row__loc {
+    grid-area: loc;
+    justify-self: end;
+    max-width: 100%;
+  }
+
+  /* 主视图运行图窄屏：站点省略为京良/杜家坎/六里桥，底色与文字对调 */
+  .checkpoint-suffix {
+    display: none;
+  }
+  .route-track__checkpoint {
+    background: var(--tag-text);
+    color: var(--accent-light);
+    padding: 2px 6px;
+    font-size: .6rem;
   }
 }

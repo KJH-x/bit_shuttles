@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips } from "../schedule-data.js";
-import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel } from "../lib/schedule.js";
+import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "../schedule-data.js";
+import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel, fidsStatus, checkpointOffsets, checkpointLabel, checkpointTimes, campusStopAt, arrivalStopAt, tripLocation } from "../lib/schedule.js";
 
 const ROUTE_IDS = new Set(ROUTES.map((r) => r.id));
 
@@ -47,10 +47,15 @@ test("weekend schedule data: valid trips on known routes", () => {
     assert.equal(typeof t.rainbow, "boolean", `rainbow must be boolean on ${t.id}`);
     assert.match(t.price, /^¥\d+\.\d{2}$/, `bad price ${t.price} on ${t.id}`);
   }
-  const dTrips = TRIPS_WEEKEND.filter((t) => t.route === "d");
-  const eTrips = TRIPS_WEEKEND.filter((t) => t.route === "e");
-  assert.equal(dTrips.length, 1, "weekend 中关村→西山 has 1 trip (08:00)");
-  assert.equal(eTrips.length, 1, "weekend 西山→中关村 has 1 trip (16:30)");
+});
+
+test("ENABLE_XISHAN off: 往返西山的全部班次被过滤（默认不展示）", () => {
+  assert.equal(ENABLE_XISHAN, false, "西山开关默认关闭（未启用不得展示）");
+  const weekendTrips = activeTrips(new Date(2026, 8, 5, 12, 0, 0));
+  assert.equal(weekendTrips.some((t) => t.route === "d"), false, "中关村→西山 (d) 不应出现");
+  assert.equal(weekendTrips.some((t) => t.route === "e"), false, "西山→中关村 (e) 不应出现");
+  const weekdayTrips = activeTrips(new Date(2026, 8, 2, 12, 0, 0));
+  assert.equal(weekdayTrips.some((t) => t.route === "d" || t.route === "e"), false);
 });
 
 test("isWeekend / activeTrips: weekend vs weekday switching", () => {
@@ -60,8 +65,9 @@ test("isWeekend / activeTrips: weekend vs weekday switching", () => {
   assert.equal(isWeekend(sat), true);
   assert.equal(isWeekend(sun), true);
   assert.equal(isWeekend(wed), false);
-  assert.equal(activeTrips(sat), TRIPS_WEEKEND);
   assert.equal(activeTrips(wed), TRIPS);
+  assert.ok(activeTrips(sat).length > 0, "周末应有班次（过滤掉西山 d/e 后仍非空）");
+  assert.ok(activeTrips(sat).every((t) => t.route === "a" || t.route === "c"), "周末启用西山前仅含 a/c");
 });
 
 test("schedule data: no 回龙观 trips remain", () => {
@@ -219,4 +225,88 @@ test("filterUpcoming visibility: running trips shown until T+10, hidden after", 
   const hideAfter = depMs + 10 * 60000;
   assert.ok(depMs + 6 * 60000 < hideAfter, "within T+10 -> still visible");
   assert.ok(depMs + 12 * 60000 >= hideAfter, "after T+10 -> hidden");
+});
+
+test("CHECKPOINTS: 良乡⇄中关村 双向各 3 个虚拟站点（京良收费站/杜家坎收费站/六里桥）", () => {
+  assert.ok(Array.isArray(CHECKPOINTS.a) && CHECKPOINTS.a.length === 3, "route a checkpoints");
+  assert.ok(Array.isArray(CHECKPOINTS.c) && CHECKPOINTS.c.length === 3, "route c checkpoints");
+  assert.equal(checkpointLabel(CHECKPOINTS.a[0]), "京良收费站");
+  assert.equal(checkpointLabel(CHECKPOINTS.a[2]), "六里桥");
+  assert.equal(checkpointLabel(CHECKPOINTS.c[0]), "六里桥");
+});
+
+test("checkpointOffsets: 使用 pos 字段（双向加权平均），无 pos 回退等分", () => {
+  assert.deepEqual(checkpointOffsets(CHECKPOINTS.a), [0.254, 0.414, 0.623]);
+  assert.deepEqual(checkpointOffsets(CHECKPOINTS.c), [0.377, 0.586, 0.746]);
+  assert.deepEqual(checkpointOffsets([1, 2, 3]), [0.25, 0.5, 0.75]);
+  assert.deepEqual(checkpointOffsets([]), []);
+});
+
+test("checkpointTimes: 按 pos 比例计算各检查点时刻", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs: depMs + 60 * 60000 };
+  const times = checkpointTimes(trip, CHECKPOINTS.a);
+  assert.equal(times.length, 3);
+  assert.equal(times[0].ms - depMs, Math.round(0.254 * 60 * 60000));
+  assert.equal(times[1].ms - depMs, Math.round(0.414 * 60 * 60000));
+  assert.equal(times[2].ms - depMs, Math.round(0.623 * 60 * 60000));
+  assert.equal(times[0].label, "京良收费站");
+});
+
+test("campusStopAt: 良乡出发 东校区→北校区→南校区 上车点窗口", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs };
+  assert.equal(campusStopAt(trip, depMs - 5 * 60000, CAMPUS.a), "东校区上车点");
+  assert.equal(campusStopAt(trip, depMs + 1 * 60000, CAMPUS.a), "北校区上车点");
+  assert.equal(campusStopAt(trip, depMs + 4 * 60000, CAMPUS.a), "南校区上车点");
+  assert.equal(campusStopAt(trip, depMs + 7 * 60000, CAMPUS.a), null);
+  assert.equal(campusStopAt(trip, depMs - 12 * 60000, CAMPUS.a), null);
+});
+
+test("campusStopAt: 中关村出发 西门→南门 上车点窗口", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "h", route: "c", dep: "12:00", price: "¥10.00", rainbow: false, depMs };
+  assert.equal(campusStopAt(trip, depMs - 5 * 60000, CAMPUS.c), "西门上车点");
+  assert.equal(campusStopAt(trip, depMs + 3 * 60000, CAMPUS.c), "南门上车点");
+  assert.equal(campusStopAt(trip, depMs + 7 * 60000, CAMPUS.c), null);
+});
+
+test("arrivalStopAt: 到达顺序按时间窗口推进，最后停留在末站", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const arrMs = depMs + 60 * 60000;
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs };
+  assert.equal(arrivalStopAt(trip, arrMs + 1 * 60000, CAMPUS.a), "南门");
+  assert.equal(arrivalStopAt(trip, arrMs + 4 * 60000, CAMPUS.a), "西门");
+  assert.equal(arrivalStopAt(trip, arrMs + 61 * 60000, CAMPUS.a), "西门");
+  const tripC = { id: "h", route: "c", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs };
+  assert.equal(arrivalStopAt(tripC, arrMs + 1 * 60000, CAMPUS.c), "东校区");
+  assert.equal(arrivalStopAt(tripC, arrMs + 3 * 60000, CAMPUS.c), "北校区");
+  assert.equal(arrivalStopAt(tripC, arrMs + 5 * 60000, CAMPUS.c), "南校区");
+  assert.equal(arrivalStopAt(tripC, arrMs + 30 * 60000, CAMPUS.c), "南校区");
+  assert.equal(arrivalStopAt(tripC, arrMs - 1 * 60000, CAMPUS.c), null);
+});
+
+test("tripLocation: 校内 / 路上距下一站 / 已到达（停站推进）", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs: depMs + 60 * 60000 };
+  assert.equal(tripLocation(trip, depMs - 5 * 60000, CHECKPOINTS.a, CAMPUS.a).text, "东校区上车点");
+  const road = tripLocation(trip, depMs + 20 * 60000, CHECKPOINTS.a, CAMPUS.a);
+  assert.equal(road.kind, "road");
+  assert.match(road.text, /距/);
+  assert.match(road.text, /分钟/);
+  const arr1 = tripLocation(trip, trip.arrMs + 1 * 60000, CHECKPOINTS.a, CAMPUS.a);
+  assert.equal(arr1.kind, "arrived");
+  assert.match(arr1.text, /南门/);
+  const arr2 = tripLocation(trip, trip.arrMs + 15 * 60000, CHECKPOINTS.a, CAMPUS.a);
+  assert.equal(arr2.kind, "arrived");
+  assert.match(arr2.text, /西门/);
+});
+
+test("fidsStatus: 等待发车 / 催促上车 / 已出发 / 已到达 四态", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs: depMs + 60 * 60000 };
+  assert.deepEqual(fidsStatus(trip, depMs - 6 * 60000), { phase: "wait", label: "等待发车" });
+  assert.deepEqual(fidsStatus(trip, depMs - 60 * 1000), { phase: "urge", label: "催促上车" });
+  assert.deepEqual(fidsStatus(trip, depMs + 30 * 60000), { phase: "dep", label: "已出发" });
+  assert.deepEqual(fidsStatus(trip, depMs + 61 * 60000), { phase: "arr", label: "已到达" });
 });

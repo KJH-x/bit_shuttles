@@ -12,16 +12,20 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260902-3">
+  <link rel="stylesheet" href="style.css?v=20260904-1">
 </head>
 <body>
-  <a href="#main-content" class="skip-link">跳转到主内容</a>
+  <a href="#view-main" class="skip-link">跳转到主内容</a>
 
   <header class="site-header">
     <div class="hero">
       <p class="eyebrow">BIT · Campus Shuttle <span class="badge" id="scheduleBadge">工作日</span></p>
       <div class="hero__row">
         <h1>良乡 ⇄ 中关村 校园班车</h1>
+        <nav class="view-switch" aria-label="切换显示模式">
+          <button type="button" class="view-switch__btn view-switch__btn--active" data-view="main" aria-pressed="true">标准屏</button>
+          <button type="button" class="view-switch__btn" data-view="fids" aria-pressed="false">PIDS</button>
+        </nav>
         <div class="clock-wrap">
           <time id="liveClock" class="live-clock" datetime="">--:--:--</time>
         </div>
@@ -29,7 +33,7 @@
     </div>
   </header>
 
-  <main class="app-shell" id="main-content">
+  <main id="view-main" class="app-shell">
     <section class="toolbar" aria-label="工具栏">
       <div class="toolbar__status" id="nextStatus" role="status" aria-live="polite">加载中…</div>
       <label for="themeSelect" class="theme-label">
@@ -41,11 +45,10 @@
         </select>
       </label>
     </section>
-
     <section class="panel" aria-labelledby="runningTitle">
       <div class="panel__head">
         <h2 class="panel__title" id="runningTitle">正在运行</h2>
-        <p class="panel__hint" id="runningHint"></p>
+        <button class="btn btn--outline running-toggle" id="detailToggle" type="button" aria-expanded="false" aria-controls="runningDetail">显示全部开行详情</button>
       </div>
 
       <div class="route-track" id="trackMain">
@@ -53,6 +56,9 @@
           <div class="route-corridor" data-corridor="main" aria-label="良乡 ⇄ 中关村">
             <div class="route-track__bar" aria-hidden="true">
               <span class="route-track__end route-track__end--left">良乡</span>
+              <span class="route-track__checkpoint" style="left:25.4%">京良<span class="checkpoint-suffix">收费站</span></span>
+              <span class="route-track__checkpoint" style="left:41.4%">杜家坎<span class="checkpoint-suffix">收费站</span></span>
+              <span class="route-track__checkpoint" style="left:62.3%">六里桥</span>
               <span class="route-track__end route-track__end--right">中关村</span>
             </div>
             <div class="lane lane--c" data-lane="c" role="img" aria-label="中关村 → 良乡"></div>
@@ -70,8 +76,6 @@
         <p class="route-track__empty" id="trackMainEmpty">当前没有班车在运行</p>
       </div>
 
-      <button class="btn btn--outline running-toggle" id="detailToggle" type="button" aria-expanded="false" aria-controls="runningDetail">显示全部开行详情</button>
-
       <div class="running-detail" id="runningDetail" hidden>
         <h3 class="running-detail__title">各班次进度</h3>
         <ul class="running-list" id="runningList" aria-label="运行中的班次进度明细"></ul>
@@ -83,15 +87,15 @@
           <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&daddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&sort=dist" target="_blank" rel="noopener" title="良乡南校区 → 中关村校区">良乡 → 中关村</a>
           <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&daddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&sort=dist" target="_blank" rel="noopener" title="中关村校区 → 良乡南校区">中关村 → 良乡</a>
         </div>
-        <div class="amap-qr" aria-label="手机扫码打开高德实时路线">
+        <div class="amap-qr" id="amapQr" aria-label="手机扫码打开高德实时路线">
           <span class="amap-qr__tip" aria-hidden="true"></span>
           <p class="amap-qr__hint">电脑端请用手机扫码打开高德实时路线</p>
           <div class="amap-qr__grid">
-            <figure class="amap-qr__item">
+            <figure class="amap-qr__item" data-qr="fwd">
               <img src="assets/qr-forward.png" alt="良乡→中关村 高德导航二维码" width="150" height="150" loading="lazy">
               <figcaption>良乡 → 中关村</figcaption>
             </figure>
-            <figure class="amap-qr__item">
+            <figure class="amap-qr__item" data-qr="rev">
               <img src="assets/qr-reverse.png" alt="中关村→良乡 高德导航二维码" width="150" height="150" loading="lazy">
               <figcaption>中关村 → 良乡</figcaption>
             </figure>
@@ -137,6 +141,35 @@
     </section>
   </main>
 
+  <main id="view-fids" class="app-shell fids-shell" hidden>
+    <section class="panel" aria-labelledby="fidsTitle">
+      <div class="panel__head">
+        <h2 class="panel__title" id="fidsTitle">PIDS · 车次总览</h2>
+      </div>
+
+      <div class="fids-table" id="fidsTable" role="table" aria-label="全部车次">
+        <div class="fids-table__head" role="row">
+          <span role="presentation"></span>
+          <span role="presentation"></span>
+          <span role="columnheader">方向</span>
+          <span role="columnheader">开点</span>
+          <span role="columnheader">状态</span>
+          <span role="columnheader">位置</span>
+        </div>
+        <div class="fids-table__body" id="fidsBody" role="rowgroup"></div>
+      </div>
+      <p class="fids-legend">
+        状态：<span class="fids-st fids-st--wait">等待发车</span> ·
+        <span class="fids-st fids-st--urge">催促上车</span> ·
+        <span class="fids-st fids-st--dep">已出发</span> ·
+        <span class="fids-st fids-st--arr">已到达</span>
+        ｜ 底色：<span class="fids-bg fids-bg--pre">未发车</span>
+        <span class="fids-bg fids-bg--run">运行中</span>
+        <span class="fids-bg fids-bg--done">已到达</span>
+      </p>
+    </section>
+  </main>
+
   <footer class="site-footer">
     <p>数据：工作日与周末时刻表 · 纯静态页面 · 浏览器本地实时推算（运行耗时当前按 1 小时估算，待更新）</p>
     <p>彩虹班车全周可约 🌈 · 免费班次全天可约 · 一般班次开售即抢（开售 5 分钟内售罄）</p>
@@ -148,7 +181,7 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260902-3" type="module"></script></body>
+  <script src="app.js?v=20260904-1" type="module"></script></body>
 </html>
 
 
