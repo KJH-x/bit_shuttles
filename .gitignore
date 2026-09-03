@@ -11,3 +11,4 @@ Thumbs.db
 *.swo
 *~
 tmp/
+docs/PLAN-live-availability.md

@@ -344,6 +344,15 @@ a:hover {
   margin-bottom: 20px;
 }
 
+/* 运行面板标题双下 margin（4px+8px）清零，不影响 PIDS/即将开行 */
+section[aria-labelledby="runningTitle"] .panel__head {
+  margin-bottom: 0;
+}
+
+#runningTitle {
+  margin-bottom: 0;
+}
+
 /* ===== Buttons (global, aligned with sibling sites) ===== */
 .btn {
   display: inline-flex;
@@ -470,6 +479,14 @@ a:hover {
   z-index: 3;
   will-change: left;
   cursor: default;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bus-marker::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
 }
 
 .bus-marker__pill {
@@ -584,12 +601,14 @@ a:hover {
 }
 
 .bus-marker:hover .bus-marker__tooltip,
+.bus-marker--active .bus-marker__tooltip,
 .route-track.show-all .bus-marker__tooltip {
   opacity: 1;
   visibility: visible;
 }
 
-.route-track.show-all .bus-marker__time {
+.route-track.show-all .bus-marker__time,
+.bus-marker--active .bus-marker__time {
   display: inline;
 }
 
@@ -709,11 +728,14 @@ a:hover {
 
 /* ===== Amap real-time links ===== */
 .amap-links {
+  position: relative;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border);
 }
 
 .amap-links__label {
@@ -742,14 +764,20 @@ a:hover {
 /* ===== QR bubble (desktop only; static QR for Amap links) ===== */
 .amap-qr {
   display: none;
-  flex-basis: 100%;
-  position: relative;
-  margin-top: 6px;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 60;
   padding: 16px;
   border-radius: 14px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+}
+
+.amap-qr--open {
+  display: block;
 }
 
 .amap-qr__tip {
@@ -797,12 +825,6 @@ a:hover {
   font-size: .72rem;
   font-weight: 600;
   color: var(--text);
-}
-
-@media (min-width: 900px) {
-  .amap-qr {
-    display: block;
-  }
 }
 
 /* ===== Panel note (gray small print) ===== */
@@ -894,6 +916,8 @@ a:hover {
 }
 
 .fids-row {
+  position: relative;
+  overflow: hidden;
   padding: 6px 14px;
   border-top: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
@@ -904,7 +928,47 @@ a:hover {
 }
 
 .fids-row--run {
-  background: var(--dir-c-soft);
+  background: var(--surface-2);
+}
+
+.fids-row--run::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: var(--pct, 0%);
+  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fids-row--run[data-route="a"]::before {
+  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+}
+
+.fids-row--run[data-route="c"]::before {
+  background: color-mix(in srgb, var(--dir-c) 18%, transparent);
+}
+
+.fids-row--run[data-route="d"]::before {
+  background: color-mix(in srgb, var(--dir-d) 18%, transparent);
+}
+
+.fids-row--run[data-route="e"]::before {
+  background: color-mix(in srgb, var(--dir-e) 18%, transparent);
+}
+
+.fids-row--run[data-rainbow="true"]::before {
+  background: linear-gradient(90deg,
+    rgba(248, 113, 113, .32),
+    rgba(251, 191, 36, .32),
+    rgba(74, 222, 128, .32),
+    rgba(96, 165, 250, .32),
+    rgba(167, 139, 250, .32));
+}
+
+.fids-row > * {
+  position: relative;
+  z-index: 1;
 }
 
 .fids-row--done {

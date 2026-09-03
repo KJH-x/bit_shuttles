@@ -4,6 +4,7 @@ import {
   formatHM,
   formatDurationLabel,
   computeAll,
+  depToMs,
   ticketInfo,
   departureLabel,
   fidsStatus,
@@ -42,9 +43,9 @@ const dom = {
   runningDetail: document.getElementById("runningDetail"),
   detailToggle: document.getElementById("detailToggle"),
   runningList: document.getElementById("runningList"),
-  runningHint: document.getElementById("runningHint"),
-  fidsStatusEl: document.getElementById("fidsStatus"),
-  fidsHint: document.getElementById("fidsHint"),
+  runningTitle: document.getElementById("runningTitle"),
+  amapButtons: [...document.querySelectorAll(".amap-links__btn")],
+  amapQr: document.getElementById("amapQr"),
   fidsBody: document.getElementById("fidsBody"),
   tripColumnA: document.getElementById("tripColumnA"),
   tripColumnC: document.getElementById("tripColumnC"),
@@ -63,13 +64,30 @@ const state = {
   showAll: false,
   runningSig: "",
   upcomingSig: "",
-  fidsSig: ""
+  fidsSig: "",
+  fidsAutoScroll: false
 };
 
-const dayKind = (date) => (isWeekend(date) ? "周末" : "工作日");
+function dayKind(date) {
+  return (isWeekend(date) ? "周末" : "工作日");
+}
+
+function badgeText(refDate, nowDate) {
+  const sameDay = refDate.getFullYear() === nowDate.getFullYear() && refDate.getMonth() === nowDate.getMonth() && refDate.getDate() === nowDate.getDate();
+  return (sameDay ? "" : "明日 · ") + dayKind(refDate);
+}
 
 function activeTripsForNow() {
-  return activeTrips(new Date(now()));
+  const date = new Date(now());
+  const todayTrips = activeTrips(date);
+  const HIDE_AFTER_MS = 10 * 60000;
+  const lastDepMs = todayTrips.reduce((mx, t) => Math.max(mx, depToMs(t.dep, date)), 0);
+  if (lastDepMs > 0 && date.getTime() >= lastDepMs + HIDE_AFTER_MS) {
+    const tomorrow = new Date(date);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return { trips: activeTrips(tomorrow), refDate: tomorrow };
+  }
+  return { trips: todayTrips, refDate: date };
 }
 
 function escapeHtml(value) {
@@ -106,6 +124,54 @@ function isFidsPath() {
   return h === "fids" || h === "pids";
 }
 
+function isDesktopDevice() {
+  const fine = window.matchMedia && matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const ua = navigator.userAgent || "";
+  const ipadLike = /iPad/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const androidPad = /Android/i.test(ua) && navigator.maxTouchPoints > 1;
+  return fine && !ipadLike && !androidPad;
+}
+
+function bindAmapQr() {
+  const btnFwd = dom.amapButtons[0];
+  const btnRev = dom.amapButtons[1];
+  const qr = dom.amapQr;
+  if (!qr || !btnFwd || !btnRev) return;
+  const fwdItem = qr.querySelector('[data-qr="fwd"]');
+  const revItem = qr.querySelector('[data-qr="rev"]');
+  const close = () => {
+    qr.classList.remove("amap-qr--open");
+    document.removeEventListener("click", onDocClick);
+  };
+  function onDocClick(e) {
+    if (!qr.contains(e.target) && !dom.amapButtons.includes(e.target)) close();
+  }
+  function open(target) {
+    if (fwdItem) fwdItem.hidden = target !== "fwd";
+    if (revItem) revItem.hidden = target !== "rev";
+    qr.classList.add("amap-qr--open");
+    document.addEventListener("click", onDocClick);
+  }
+  btnFwd.addEventListener("click", (e) => {
+    if (!isDesktopDevice()) return;
+    e.preventDefault();
+    if (qr.classList.contains("amap-qr--open") && fwdItem && !fwdItem.hidden) {
+      close();
+      return;
+    }
+    open("fwd");
+  });
+  btnRev.addEventListener("click", (e) => {
+    if (!isDesktopDevice()) return;
+    e.preventDefault();
+    if (qr.classList.contains("amap-qr--open") && revItem && !revItem.hidden) {
+      close();
+      return;
+    }
+    open("rev");
+  });
+}
+
 function applyView() {
   const fids = isFidsPath();
   dom.viewMain.hidden = fids;
@@ -115,6 +181,7 @@ function applyView() {
     btn.classList.toggle("view-switch__btn--active", active);
     btn.setAttribute("aria-pressed", String(active));
   }
+  if (fids) state.fidsAutoScroll = true;
 }
 
 function bindViewSwitch() {
@@ -148,6 +215,12 @@ function laneFor(trip) {
   return dom.corridorContainer.querySelector(`[data-lane="${trip.route}"]`);
 }
 
+function toggleBusActive(el) {
+  const wasActive = el.classList.contains("bus-marker--active");
+  document.querySelectorAll(".bus-marker--active").forEach((m) => m.classList.remove("bus-marker--active"));
+  if (!wasActive) el.classList.add("bus-marker--active");
+}
+
 function makeBusMarker(trip, now) {
   const lane = laneFor(trip);
   if (!lane) return null;
@@ -163,6 +236,45 @@ function makeBusMarker(trip, now) {
     <span class="bus-marker__tooltip" data-role="tooltip"></span>
   `;
   updateBusMarker(el, trip, now);
+  let tapPointerId = null;
+  let tapStartX = 0;
+  let tapStartY = 0;
+  let tapHandledByPointer = false;
+  el.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return;
+    tapPointerId = e.pointerId;
+    tapStartX = e.clientX;
+    tapStartY = e.clientY;
+    tapHandledByPointer = false;
+    if (el.setPointerCapture) {
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+  });
+  el.addEventListener("pointerup", (e) => {
+    if (e.pointerType === "mouse" || e.pointerId !== tapPointerId) return;
+    const dx = e.clientX - tapStartX;
+    const dy = e.clientY - tapStartY;
+    tapHandledByPointer = true;
+    if (dx * dx + dy * dy < 100) {
+      toggleBusActive(el);
+    }
+    tapPointerId = null;
+    if (el.releasePointerCapture && el.hasPointerCapture && el.hasPointerCapture(e.pointerId)) {
+      try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+  });
+  el.addEventListener("pointercancel", () => {
+    tapPointerId = null;
+    tapHandledByPointer = false;
+  });
+  el.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (tapHandledByPointer) {
+      tapHandledByPointer = false;
+      return;
+    }
+    toggleBusActive(el);
+  });
   lane.appendChild(el);
   return el;
 }
@@ -256,9 +368,9 @@ function runningItemHtml(trip, now) {
 function renderRunningList(all, now) {
   const running = all.filter((t) => t.status === "running");
   const sig = running.map((t) => t.id).join(",");
-  dom.runningHint.textContent = running.length
-    ? `当前 ${running.length} 个班次在运行，进度按预计耗时实时推算`
-    : "暂无班车在运行，下方列出即将开行的班次";
+  const n = running.length;
+  dom.runningTitle.textContent = n ? `正在运行 (${n})` : "正在运行";
+  dom.detailToggle.hidden = n === 0;
   if (sig !== state.runningSig) {
     state.runningSig = sig;
     dom.runningList.innerHTML = running.map((t) => runningItemHtml(t, now)).join("");
@@ -388,7 +500,7 @@ function renderStatus(all, now) {
     const suffix = diff <= 60000 ? "即将发车" : `约 ${formatDurationLabel(diff)}后发车`;
     dom.nextStatus.innerHTML = `下一班：<strong>${escapeHtml(next.dep)}</strong> ${escapeHtml(ROUTE_LABEL[next.route])} · <strong>${escapeHtml(suffix)}</strong>`;
   } else {
-    dom.nextStatus.textContent = "今日班次已全部开行";
+    dom.nextStatus.textContent = "当前时刻表班次已全部开行";
   }
 }
 
@@ -405,7 +517,8 @@ function bindChips() {
       c.classList.toggle("filter-chip--active", active);
       c.setAttribute("aria-pressed", String(active));
     });
-    renderUpcoming(computeAll(activeTripsForNow(), now(), DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), now());
+    const ctx = activeTripsForNow();
+    renderUpcoming(computeAll(ctx.trips, now(), DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, ctx.refDate), now());
   });
 }
 
@@ -424,8 +537,9 @@ function fidsLocText(trip, now) {
 function fidsRowHtml(trip, now) {
   const st = fidsStatus(trip, now);
   const group = FIDS_ROW_GROUP[st.phase];
+  const pct = st.phase === "dep" ? Math.round(trip.progress * 100) : 0;
   return `
-    <div class="fids-row fids-row--${group}" data-id="${trip.id}">
+    <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" style="--pct:${pct}%">
       <span class="fids-row__arrow fids-row__arrow--l" aria-hidden="true">${FIDS_ARROW_L[trip.route] || ""}</span>
       <span class="fids-row__arrow fids-row__arrow--r" aria-hidden="true">${FIDS_ARROW_R[trip.route] || ""}</span>
       <span class="fids-row__dir">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
@@ -448,6 +562,7 @@ function renderFids(all, now) {
     if (!trip) return;
     const st = fidsStatus(trip, now);
     row.className = `fids-row fids-row--${FIDS_ROW_GROUP[st.phase]}`;
+    row.style.setProperty("--pct", `${st.phase === "dep" ? Math.round(trip.progress * 100) : 0}%`);
     const el = row.querySelector('[data-role="fids-status"]');
     if (el) {
       el.textContent = st.label;
@@ -456,8 +571,6 @@ function renderFids(all, now) {
     const loc = row.querySelector('[data-role="fids-loc"]');
     if (loc) loc.textContent = fidsLocText(trip, now);
   });
-  const total = list.length;
-  dom.fidsStatusEl.textContent = `共 ${total} 个班次`;
 }
 
 /* ===== PWA: register service worker for install + offline ===== */
@@ -473,16 +586,37 @@ function registerSW() {
 /* ===== Tick loop ===== */
 function tick() {
   const n = now();
-  const all = computeAll(activeTripsForNow(), n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
   const nowDate = new Date(n);
+  const display = activeTripsForNow();
+  const displayAll = computeAll(display.trips, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, display.refDate);
+  const todayAll = computeAll(activeTrips(nowDate), n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, nowDate);
   dom.clock.textContent = formatClock(nowDate);
   dom.clock.setAttribute("datetime", nowDate.toISOString());
-  dom.scheduleBadge.textContent = dayKind(nowDate);
-  renderTrack(all, n);
-  renderRunningList(all, n);
-  renderUpcoming(all, n);
-  renderStatus(all, n);
-  renderFids(all, n);
+  dom.scheduleBadge.textContent = badgeText(display.refDate, nowDate);
+  renderTrack(todayAll, n);
+  renderRunningList(todayAll, n);
+  renderUpcoming(displayAll, n);
+  renderStatus(displayAll, n);
+  renderFids(displayAll, n);
+  if (state.fidsAutoScroll) {
+    autoScrollFids();
+    state.fidsAutoScroll = false;
+  }
+}
+
+function autoScrollFids() {
+  const rows = [...dom.fidsBody.querySelectorAll(".fids-row")];
+  if (!rows.length) return;
+  let anchor = null;
+  for (const r of rows) {
+    if (r.classList.contains("fids-row--done")) anchor = r;
+  }
+  if (!anchor) {
+    for (const r of rows) {
+      if (r.classList.contains("fids-row--run") || r.classList.contains("fids-row--pre")) { anchor = r; break; }
+    }
+  }
+  (anchor || rows[0]).scrollIntoView({ block: "start" });
 }
 
 /* ===== Init ===== */
@@ -490,6 +624,10 @@ bindTheme();
 bindViewSwitch();
 bindChips();
 bindDetailToggle();
+bindAmapQr();
+document.addEventListener("click", () => {
+  document.querySelectorAll(".bus-marker--active").forEach((m) => m.classList.remove("bus-marker--active"));
+});
 initCheckpointStrip();
 initClockSync();
 registerSW();
