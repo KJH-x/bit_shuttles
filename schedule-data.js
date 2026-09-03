@@ -2,7 +2,7 @@ export const DURATION_MIN = 60;
 
 export const DURATION_BY_ROUTE = {};
 
-export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260902-4";
+export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260902-5";
 
 export const ROUTES = [
   { id: "a", label: "良乡 → 中关村" },
@@ -109,14 +109,34 @@ export function activeTrips(date = new Date()) {
 
 export const CHECKPOINTS = {
   a: [
-    { name: "京良", note: "收费站" },
-    { name: "杜家坎", note: "收费站" },
-    { name: "六里桥" }
+    { name: "京良", note: "收费站", pos: 0.254, segMin: 17, segKm: 7.2 },
+    { name: "杜家坎", note: "收费站", pos: 0.414, segMin: 9, segKm: 9.9 },
+    { name: "六里桥", pos: 0.623, segMin: 11, segKm: 10 }
   ],
   c: [
-    { name: "六里桥" },
-    { name: "杜家坎", note: "收费站" },
-    { name: "京良", note: "收费站" }
+    { name: "六里桥", pos: 0.377, segMin: 25, segKm: 9 },
+    { name: "杜家坎", note: "收费站", pos: 0.586, segMin: 14, segKm: 10.7 },
+    { name: "京良", note: "收费站", pos: 0.746, segMin: 10, segKm: 10.5 }
   ]
+};
+
+export const CAMPUS = {
+  a: {
+    board: [
+      { until: 0, name: "东校区上车点" },
+      { until: 3, name: "北校区上车点" },
+      { until: 6, name: "南校区上车点" }
+    ],
+    arrive: ["南门", "西门"],
+    final: { segMin: 20, segKm: 8.9 }
+  },
+  c: {
+    board: [
+      { until: 0, name: "西门上车点" },
+      { until: 6, name: "南门上车点" }
+    ],
+    arrive: ["东校区", "北校区", "南校区"],
+    final: { segMin: 13, segKm: 6.7 }
+  }
 };
 

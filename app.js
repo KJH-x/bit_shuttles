@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS } from "./schedule-data.js?v=20260902-4";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "./schedule-data.js?v=20260902-5";
 import {
   formatClock,
   formatHM,
@@ -9,11 +9,13 @@ import {
   fidsStatus,
   checkpointTimes,
   checkpointLabel,
-  checkpointOffsets
-} from "./lib/schedule.js?v=20260902-4";
-import { now, syncClock } from "./lib/time.js?v=20260902-4";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260902-4";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-4";
+  checkpointOffsets,
+  tripLocation,
+  campusStopAt
+} from "./lib/schedule.js?v=20260902-5";
+import { now, syncClock } from "./lib/time.js?v=20260902-5";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260902-5";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-5";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -41,7 +43,6 @@ const dom = {
   detailToggle: document.getElementById("detailToggle"),
   runningList: document.getElementById("runningList"),
   runningHint: document.getElementById("runningHint"),
-  checkpointItems: document.getElementById("checkpointItems"),
   fidsStatusEl: document.getElementById("fidsStatus"),
   fidsHint: document.getElementById("fidsHint"),
   fidsBody: document.getElementById("fidsBody"),
@@ -131,14 +132,7 @@ function bindViewSwitch() {
   });
 }
 
-function initCheckpointStrip() {
-  if (!dom.checkpointItems) return;
-  const cps = CHECKPOINTS.a || [];
-  dom.checkpointItems.innerHTML = cps.map((cp) => {
-    const off = checkpointOffsets(cps)[cps.indexOf(cp)];
-    return `<span class="checkpoint-item">${escapeHtml(checkpointLabel(cp))}<small>·${Math.round(off * 100)}%处</small></span>`;
-  }).join("");
-}
+function initCheckpointStrip() {}
 
 /* ===== Clock sync (time correctness, badge removed) ===== */
 async function initClockSync() {
@@ -352,8 +346,15 @@ function renderList(ul, list, now, highlightNext) {
     if (!trip) return;
     const cd = li.querySelector('[data-role="countdown"]');
     if (cd) {
-      cd.textContent = departureLabel(trip, now);
-      cd.classList.toggle("trip-item__countdown--soon", trip.depMs - now <= 10 * 60000);
+      if (now < trip.depMs) {
+        cd.textContent = departureLabel(trip, now);
+        cd.classList.toggle("trip-item__countdown--soon", trip.depMs - now <= 10 * 60000);
+      } else {
+        const relMin = (now - trip.depMs) / 60000;
+        const stop = campusStopAt(trip, now, CAMPUS[trip.route]);
+        cd.textContent = stop ? stop : "已出发";
+        cd.classList.toggle("trip-item__countdown--soon", true);
+      }
     }
     const tk = li.querySelector('[data-role="ticket"]');
     if (tk) {
@@ -413,9 +414,14 @@ function bindChips() {
   });
 }
 
-/* ===== FIDS: 全车次、一行一趟、方向/开点/状态 ===== */
+/* ===== FIDS: 全车次、一行一趟、方向/开点/状态/位置 ===== */
 const FIDS_PHASE_CLASS = { wait: "fids-st--wait", urge: "fids-st--urge", dep: "fids-st--dep", arr: "fids-st--arr" };
 const FIDS_ROW_GROUP = { wait: "pre", urge: "pre", dep: "run", arr: "done" };
+
+function fidsLocText(trip, now) {
+  const loc = tripLocation(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
+  return loc ? loc.text : "—";
+}
 
 function fidsRowHtml(trip, now) {
   const st = fidsStatus(trip, now);
@@ -425,6 +431,7 @@ function fidsRowHtml(trip, now) {
       <span class="fids-row__dir">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
       <span class="fids-row__dep">${escapeHtml(trip.dep)}</span>
       <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>
+      <span class="fids-row__loc" data-role="fids-loc">${escapeHtml(fidsLocText(trip, now))}</span>
     </div>
   `;
 }
@@ -446,6 +453,8 @@ function renderFids(all, now) {
       el.textContent = st.label;
       el.className = `fids-st ${FIDS_PHASE_CLASS[st.phase]}`;
     }
+    const loc = row.querySelector('[data-role="fids-loc"]');
+    if (loc) loc.textContent = fidsLocText(trip, now);
   });
   const total = list.length;
   dom.fidsStatusEl.textContent = `共 ${total} 个班次`;

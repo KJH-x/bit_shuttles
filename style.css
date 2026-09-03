@@ -424,6 +424,21 @@ a:hover {
   font-size: .8rem;
 }
 
+.route-track__checkpoint {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--accent-light);
+  color: var(--tag-text);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 2;
+  opacity: .92;
+}
+
 /* Each lane: a horizontal progress line with absolute-positioned bus markers.
    Background hidden to keep a single central rounded rectangle; bus markers remain. */
 .lane {
@@ -791,45 +806,6 @@ a:hover {
   line-height: 1.5;
 }
 
-/* ===== Virtual stations (checkpoints) strip — main view ===== */
-.checkpoint-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-  font-size: .75rem;
-  color: var(--muted);
-}
-
-.checkpoint-strip__label {
-  font-weight: 700;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--tag-bg);
-  color: var(--tag-text);
-}
-
-.checkpoint-strip__items {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.checkpoint-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--surface-2);
-  border: 1px dashed var(--border);
-  border-radius: 999px;
-  padding: 2px 10px;
-}
-
-.checkpoint-item small {
-  color: var(--muted);
-}
-
 /* ===== Running item checkpoint line ===== */
 .running-item__cp {
   display: flex;
@@ -882,8 +858,9 @@ a:hover {
 .fids-table__head,
 .fids-row {
   display: grid;
-  grid-template-columns: 1fr 72px 120px;
+  grid-template-columns: 1fr 72px 120px 1fr;
   align-items: center;
+  gap: 8px;
 }
 
 .fids-table__head {
@@ -921,6 +898,14 @@ a:hover {
 .fids-row__dep {
   color: var(--text);
   font-weight: 700;
+}
+
+.fids-row__loc {
+  font-size: .8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fids-st {

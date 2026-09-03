@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260902-4">
+  <link rel="stylesheet" href="style.css?v=20260902-5">
 </head>
 <body>
   <a href="#view-main" class="skip-link">跳转到主内容</a>
@@ -56,6 +56,9 @@
           <div class="route-corridor" data-corridor="main" aria-label="良乡 ⇄ 中关村">
             <div class="route-track__bar" aria-hidden="true">
               <span class="route-track__end route-track__end--left">良乡</span>
+              <span class="route-track__checkpoint" style="left:25.4%">京良收费站</span>
+              <span class="route-track__checkpoint" style="left:41.4%">杜家坎收费站</span>
+              <span class="route-track__checkpoint" style="left:62.3%">六里桥</span>
               <span class="route-track__end route-track__end--right">中关村</span>
             </div>
             <div class="lane lane--c" data-lane="c" role="img" aria-label="中关村 → 良乡"></div>
@@ -71,11 +74,6 @@
           </div>
         </div>
         <p class="route-track__empty" id="trackMainEmpty">当前没有班车在运行</p>
-      </div>
-
-      <div class="checkpoint-strip" id="checkpointStrip" aria-label="虚拟站点">
-        <span class="checkpoint-strip__label">虚拟站点</span>
-        <span class="checkpoint-strip__items" id="checkpointItems"></span>
       </div>
 
       <button class="btn btn--outline running-toggle" id="detailToggle" type="button" aria-expanded="false" aria-controls="runningDetail">显示全部开行详情</button>
@@ -161,7 +159,10 @@
           <span role="columnheader">方向</span>
           <span role="columnheader">开点</span>
           <span role="columnheader">状态</span>
+          <span role="columnheader">位置</span>
         </div>
+        <div class="fids-table__body" id="fidsBody" role="rowgroup"></div>
+      </div>
         <div class="fids-table__body" id="fidsBody" role="rowgroup"></div>
       </div>
       <p class="fids-legend">
@@ -188,7 +189,7 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260902-4" type="module"></script></body>
+  <script src="app.js?v=20260902-5" type="module"></script></body>
 </html>
 
 
