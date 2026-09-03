@@ -206,7 +206,6 @@ function renderTrack(all, now) {
           updateBusMarker(el, trip, now);
         }
       }
-      lane.hidden = trips.length === 0;
     }
     block.hidden = !hasBus;
   }
