@@ -1293,11 +1293,10 @@ a:hover {
     display: none;
   }
   .fids-row {
-    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-columns: 22px minmax(0, 1fr) auto;
     grid-template-areas:
-      "arrow dep"
-      "arrow dir"
-      "status loc";
+      "arrow dep status"
+      "arrow dir loc";
   }
   .fids-row__arrow--l,
   .fids-row__arrow--r {
@@ -1313,7 +1312,7 @@ a:hover {
   }
   .fids-st {
     grid-area: status;
-    justify-self: start;
+    justify-self: end;
   }
   .fids-row__loc {
     grid-area: loc;

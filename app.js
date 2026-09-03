@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "./schedule-data.js?v=20260902-8";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "./schedule-data.js?v=20260902-9";
 import {
   formatClock,
   formatHM,
@@ -12,10 +12,10 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260902-8";
-import { now, syncClock } from "./lib/time.js?v=20260902-8";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260902-8";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-8";
+} from "./lib/schedule.js?v=20260902-9";
+import { now, syncClock } from "./lib/time.js?v=20260902-9";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260902-9";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-9";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
