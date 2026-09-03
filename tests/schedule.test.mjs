@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips } from "../schedule-data.js";
-import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel } from "../lib/schedule.js";
+import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS } from "../schedule-data.js";
+import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel, fidsStatus, checkpointOffsets, checkpointLabel, checkpointTimes } from "../lib/schedule.js";
 
 const ROUTE_IDS = new Set(ROUTES.map((r) => r.id));
 
@@ -219,4 +219,37 @@ test("filterUpcoming visibility: running trips shown until T+10, hidden after", 
   const hideAfter = depMs + 10 * 60000;
   assert.ok(depMs + 6 * 60000 < hideAfter, "within T+10 -> still visible");
   assert.ok(depMs + 12 * 60000 >= hideAfter, "after T+10 -> hidden");
+});
+
+test("CHECKPOINTS: 良乡⇄中关村 双向各 3 个虚拟站点（京良收费站/杜家坎收费站/六里桥）", () => {
+  assert.ok(Array.isArray(CHECKPOINTS.a) && CHECKPOINTS.a.length === 3, "route a checkpoints");
+  assert.ok(Array.isArray(CHECKPOINTS.c) && CHECKPOINTS.c.length === 3, "route c checkpoints");
+  assert.equal(checkpointLabel(CHECKPOINTS.a[0]), "京良收费站");
+  assert.equal(checkpointLabel(CHECKPOINTS.a[2]), "六里桥");
+  assert.equal(checkpointLabel(CHECKPOINTS.c[0]), "六里桥");
+});
+
+test("checkpointOffsets: 平均等分（3 个检查点 -> 1/4, 1/2, 3/4）", () => {
+  assert.deepEqual(checkpointOffsets([1, 2, 3]), [0.25, 0.5, 0.75]);
+  assert.deepEqual(checkpointOffsets([]), []);
+});
+
+test("checkpointTimes: 按耗时等分计算各检查点时刻", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs: depMs + 60 * 60000 };
+  const times = checkpointTimes(trip, CHECKPOINTS.a);
+  assert.equal(times.length, 3);
+  assert.equal(times[0].ms - depMs, 15 * 60000);
+  assert.equal(times[1].ms - depMs, 30 * 60000);
+  assert.equal(times[2].ms - depMs, 45 * 60000);
+  assert.equal(times[0].label, "京良收费站");
+});
+
+test("fidsStatus: 等待发车 / 催促上车 / 已出发 / 已到达 四态", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs: depMs + 60 * 60000 };
+  assert.deepEqual(fidsStatus(trip, depMs - 6 * 60000), { phase: "wait", label: "等待发车" });
+  assert.deepEqual(fidsStatus(trip, depMs - 60 * 1000), { phase: "urge", label: "催促上车" });
+  assert.deepEqual(fidsStatus(trip, depMs + 30 * 60000), { phase: "dep", label: "已出发" });
+  assert.deepEqual(fidsStatus(trip, depMs + 61 * 60000), { phase: "arr", label: "已到达" });
 });

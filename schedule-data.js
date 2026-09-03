@@ -2,7 +2,7 @@ export const DURATION_MIN = 60;
 
 export const DURATION_BY_ROUTE = {};
 
-export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260902-3";
+export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260902-4";
 
 export const ROUTES = [
   { id: "a", label: "良乡 → 中关村" },
@@ -107,6 +107,16 @@ export function activeTrips(date = new Date()) {
   return isWeekend(date) ? TRIPS_WEEKEND : TRIPS;
 }
 
-
-
+export const CHECKPOINTS = {
+  a: [
+    { name: "京良", note: "收费站" },
+    { name: "杜家坎", note: "收费站" },
+    { name: "六里桥" }
+  ],
+  c: [
+    { name: "六里桥" },
+    { name: "杜家坎", note: "收费站" },
+    { name: "京良", note: "收费站" }
+  ]
+};
 

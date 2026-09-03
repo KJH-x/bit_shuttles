@@ -1,15 +1,19 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips } from "./schedule-data.js?v=20260902-3";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS } from "./schedule-data.js?v=20260902-4";
 import {
   formatClock,
   formatHM,
   formatDurationLabel,
   computeAll,
   ticketInfo,
-  departureLabel
-} from "./lib/schedule.js?v=20260902-3";
-import { now, syncClock } from "./lib/time.js?v=20260902-3";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260902-3";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-3";
+  departureLabel,
+  fidsStatus,
+  checkpointTimes,
+  checkpointLabel,
+  checkpointOffsets
+} from "./lib/schedule.js?v=20260902-4";
+import { now, syncClock } from "./lib/time.js?v=20260902-4";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260902-4";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-4";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -23,6 +27,9 @@ const fwdTrip = (t) => FWD.has(t.route);
 const dom = {
   clock: document.getElementById("liveClock"),
   scheduleBadge: document.getElementById("scheduleBadge"),
+  viewMain: document.getElementById("view-main"),
+  viewFids: document.getElementById("view-fids"),
+  viewSwitchBtns: [...document.querySelectorAll(".view-switch__btn")],
   nextStatus: document.getElementById("nextStatus"),
   resultsStatus: document.getElementById("resultsStatus"),
   themeSelect: document.getElementById("themeSelect"),
@@ -34,6 +41,10 @@ const dom = {
   detailToggle: document.getElementById("detailToggle"),
   runningList: document.getElementById("runningList"),
   runningHint: document.getElementById("runningHint"),
+  checkpointItems: document.getElementById("checkpointItems"),
+  fidsStatusEl: document.getElementById("fidsStatus"),
+  fidsHint: document.getElementById("fidsHint"),
+  fidsBody: document.getElementById("fidsBody"),
   tripColumnA: document.getElementById("tripColumnA"),
   tripColumnC: document.getElementById("tripColumnC"),
   tripColumnD: document.getElementById("tripColumnD"),
@@ -50,7 +61,8 @@ const state = {
   routeFilter: "all",
   showAll: false,
   runningSig: "",
-  upcomingSig: ""
+  upcomingSig: "",
+  fidsSig: ""
 };
 
 const dayKind = (date) => (isWeekend(date) ? "周末" : "工作日");
@@ -85,6 +97,48 @@ function bindTheme() {
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if (state.theme === "system") applyTheme("system");
   });
+}
+
+/* ===== View switch: main ⇄ FIDS (/FIDS) ===== */
+function isFidsPath() {
+  const p = location.pathname.replace(/\/+$/, "").toLowerCase();
+  return p === "/fids";
+}
+
+function applyView() {
+  const fids = isFidsPath();
+  dom.viewMain.hidden = fids;
+  dom.viewFids.hidden = !fids;
+  for (const btn of dom.viewSwitchBtns) {
+    const active = btn.dataset.view === (fids ? "fids" : "main");
+    btn.classList.toggle("view-switch__btn--active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  }
+}
+
+function bindViewSwitch() {
+  for (const btn of dom.viewSwitchBtns) {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.view === "fids" ? "/FIDS" : "/";
+      if (location.pathname === target) return;
+      history.pushState({}, "", target);
+      applyView();
+      tick();
+    });
+  }
+  window.addEventListener("popstate", () => {
+    applyView();
+    tick();
+  });
+}
+
+function initCheckpointStrip() {
+  if (!dom.checkpointItems) return;
+  const cps = CHECKPOINTS.a || [];
+  dom.checkpointItems.innerHTML = cps.map((cp) => {
+    const off = checkpointOffsets(cps)[cps.indexOf(cp)];
+    return `<span class="checkpoint-item">${escapeHtml(checkpointLabel(cp))}<small>·${Math.round(off * 100)}%处</small></span>`;
+  }).join("");
 }
 
 /* ===== Clock sync (time correctness, badge removed) ===== */
@@ -183,6 +237,13 @@ function runningItemHtml(trip, now) {
   const remaining = trip.arrMs - now;
   const pct = Math.round(trip.progress * 100);
   const fillCls = trip.rainbow ? "running-item__fill--rainbow" : `running-item__fill--${trip.route}`;
+  const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
+  const cpLine = cps.length
+    ? `<div class="running-item__cp" data-role="checkpoints">${cps.map((cp, i) => {
+        const passed = now >= cp.ms;
+        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${escapeHtml(cp.label)}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? '<span class="running-item__cp-arrow">→</span>' : ""}`;
+      }).join("")}</div>`
+    : "";
   return `
     <li class="running-item" data-id="${trip.id}">
       <div class="running-item__head">
@@ -198,6 +259,7 @@ function runningItemHtml(trip, now) {
         <span>预计到达 <b>${escapeHtml(formatHM(new Date(trip.arrMs)))}</b></span>
         <span data-role="remaining">剩余 ${escapeHtml(formatDurationLabel(remaining))}</span>
       </div>
+      ${cpLine}
     </li>
   `;
 }
@@ -223,6 +285,14 @@ function renderRunningList(all, now) {
     if (fill) fill.style.width = `${pct}%`;
     if (pctEl) pctEl.textContent = `${pct}%`;
     if (remEl) remEl.textContent = `剩余 ${formatDurationLabel(remaining)}`;
+    const cpEls = li.querySelector('[data-role="checkpoints"]');
+    if (cpEls) {
+      const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
+      cps.forEach((cp, i) => {
+        const item = cpEls.querySelectorAll(".running-item__cp-item")[i];
+        if (item) item.classList.toggle("is-passed", now >= cp.ms);
+      });
+    }
   });
 }
 
@@ -344,6 +414,44 @@ function bindChips() {
   });
 }
 
+/* ===== FIDS: 全车次、一行一趟、方向/开点/状态 ===== */
+const FIDS_PHASE_CLASS = { wait: "fids-st--wait", urge: "fids-st--urge", dep: "fids-st--dep", arr: "fids-st--arr" };
+const FIDS_ROW_GROUP = { wait: "pre", urge: "pre", dep: "run", arr: "done" };
+
+function fidsRowHtml(trip, now) {
+  const st = fidsStatus(trip, now);
+  const group = FIDS_ROW_GROUP[st.phase];
+  return `
+    <div class="fids-row fids-row--${group}" data-id="${trip.id}">
+      <span class="fids-row__dir">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
+      <span class="fids-row__dep">${escapeHtml(trip.dep)}</span>
+      <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>
+    </div>
+  `;
+}
+
+function renderFids(all, now) {
+  const list = all.slice().sort((a, b) => a.depMs - b.depMs);
+  const sig = list.map((t) => t.id).join(",");
+  if (sig !== state.fidsSig) {
+    state.fidsSig = sig;
+    dom.fidsBody.innerHTML = list.map((t) => fidsRowHtml(t, now)).join("");
+  }
+  dom.fidsBody.querySelectorAll(".fids-row").forEach((row) => {
+    const trip = list.find((t) => t.id === row.dataset.id);
+    if (!trip) return;
+    const st = fidsStatus(trip, now);
+    row.className = `fids-row fids-row--${FIDS_ROW_GROUP[st.phase]}`;
+    const el = row.querySelector('[data-role="fids-status"]');
+    if (el) {
+      el.textContent = st.label;
+      el.className = `fids-st ${FIDS_PHASE_CLASS[st.phase]}`;
+    }
+  });
+  const total = list.length;
+  dom.fidsStatusEl.textContent = `共 ${total} 个班次`;
+}
+
 /* ===== PWA: register service worker for install + offline ===== */
 function registerSW() {
   if (!("serviceWorker" in navigator)) return;
@@ -366,12 +474,15 @@ function tick() {
   renderRunningList(all, n);
   renderUpcoming(all, n);
   renderStatus(all, n);
+  renderFids(all, n);
 }
 
 /* ===== Init ===== */
 bindTheme();
+bindViewSwitch();
 bindChips();
 bindDetailToggle();
+initCheckpointStrip();
 initClockSync();
 registerSW();
 if (initQQBrowserGuide()) {
@@ -379,6 +490,7 @@ if (initQQBrowserGuide()) {
 } else {
   initInstallGuide();
 }
+applyView();
 tick();
 setInterval(tick, 1000);
 

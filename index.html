@@ -12,16 +12,20 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260902-3">
+  <link rel="stylesheet" href="style.css?v=20260902-4">
 </head>
 <body>
-  <a href="#main-content" class="skip-link">跳转到主内容</a>
+  <a href="#view-main" class="skip-link">跳转到主内容</a>
 
   <header class="site-header">
     <div class="hero">
       <p class="eyebrow">BIT · Campus Shuttle <span class="badge" id="scheduleBadge">工作日</span></p>
       <div class="hero__row">
         <h1>良乡 ⇄ 中关村 校园班车</h1>
+        <nav class="view-switch" aria-label="切换显示模式">
+          <button type="button" class="view-switch__btn view-switch__btn--active" data-view="main" aria-pressed="true">标准屏</button>
+          <button type="button" class="view-switch__btn" data-view="fids" aria-pressed="false">FIDS</button>
+        </nav>
         <div class="clock-wrap">
           <time id="liveClock" class="live-clock" datetime="">--:--:--</time>
         </div>
@@ -29,7 +33,7 @@
     </div>
   </header>
 
-  <main class="app-shell" id="main-content">
+  <main id="view-main" class="app-shell">
     <section class="toolbar" aria-label="工具栏">
       <div class="toolbar__status" id="nextStatus" role="status" aria-live="polite">加载中…</div>
       <label for="themeSelect" class="theme-label">
@@ -41,7 +45,6 @@
         </select>
       </label>
     </section>
-
     <section class="panel" aria-labelledby="runningTitle">
       <div class="panel__head">
         <h2 class="panel__title" id="runningTitle">正在运行</h2>
@@ -68,6 +71,11 @@
           </div>
         </div>
         <p class="route-track__empty" id="trackMainEmpty">当前没有班车在运行</p>
+      </div>
+
+      <div class="checkpoint-strip" id="checkpointStrip" aria-label="虚拟站点">
+        <span class="checkpoint-strip__label">虚拟站点</span>
+        <span class="checkpoint-strip__items" id="checkpointItems"></span>
       </div>
 
       <button class="btn btn--outline running-toggle" id="detailToggle" type="button" aria-expanded="false" aria-controls="runningDetail">显示全部开行详情</button>
@@ -137,6 +145,38 @@
     </section>
   </main>
 
+  <main id="view-fids" class="app-shell fids-shell" hidden>
+    <section class="toolbar" aria-label="工具栏">
+      <div class="toolbar__status" id="fidsStatus" role="status" aria-live="polite">加载中…</div>
+    </section>
+
+    <section class="panel" aria-labelledby="fidsTitle">
+      <div class="panel__head">
+        <h2 class="panel__title" id="fidsTitle">FIDS · 车次总览</h2>
+        <p class="panel__hint" id="fidsHint">全车次 · 一行一趟 · 状态实时刷新</p>
+      </div>
+
+      <div class="fids-table" id="fidsTable" role="table" aria-label="全部车次">
+        <div class="fids-table__head" role="row">
+          <span role="columnheader">方向</span>
+          <span role="columnheader">开点</span>
+          <span role="columnheader">状态</span>
+        </div>
+        <div class="fids-table__body" id="fidsBody" role="rowgroup"></div>
+      </div>
+      <p class="fids-legend">
+        状态：<span class="fids-st fids-st--wait">等待发车</span> ·
+        <span class="fids-st fids-st--urge">催促上车</span> ·
+        <span class="fids-st fids-st--dep">已出发</span> ·
+        <span class="fids-st fids-st--arr">已到达</span>
+        ｜ 底色：<span class="fids-bg fids-bg--pre">未发车</span>
+        <span class="fids-bg fids-bg--run">运行中</span>
+        <span class="fids-bg fids-bg--done">已到达</span>
+      </p>
+      <p class="panel__note">虚拟站点（无实际停靠，平均估算，待补充）：京良（收费站）· 杜家坎（收费站）· 六里桥</p>
+    </section>
+  </main>
+
   <footer class="site-footer">
     <p>数据：工作日与周末时刻表 · 纯静态页面 · 浏览器本地实时推算（运行耗时当前按 1 小时估算，待更新）</p>
     <p>彩虹班车全周可约 🌈 · 免费班次全天可约 · 一般班次开售即抢（开售 5 分钟内售罄）</p>
@@ -148,7 +188,7 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260902-3" type="module"></script></body>
+  <script src="app.js?v=20260902-4" type="module"></script></body>
 </html>
 
 
