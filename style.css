@@ -851,7 +851,7 @@ a:hover {
 }
 
 /* ===== FIDS view ===== */
-.fids-shell .app-shell {
+.fids-shell.app-shell {
   padding-top: 20px;
 }
 
@@ -1273,7 +1273,7 @@ a:hover {
   }
 
   /* PIDS 窄屏：外框去两侧边距 + 直角 */
-  .fids-shell .app-shell {
+  .fids-shell {
     padding-left: 0;
     padding-right: 0;
   }
@@ -1288,33 +1288,32 @@ a:hover {
     border-radius: 0;
   }
 
-  /* PIDS 窄屏重排为 3 列：第0列=方向箭头（两列合并），第一列=A➡B 方向，第二列=时间/状态/位置 */
+  /* PIDS 窄屏紧凑：左列=箭头（占两行），右列=时间在上/方向在下；状态+位置第三行两列 */
   .fids-table__head {
     display: none;
   }
   .fids-row {
-    grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: 22px minmax(0, 1fr);
     grid-template-areas:
-      "arrow dir dep"
-      "arrow dir status"
-      "arrow dir loc";
+      "arrow dep"
+      "arrow dir"
+      "status loc";
   }
   .fids-row__arrow--l,
   .fids-row__arrow--r {
     grid-area: arrow;
     text-align: center;
-    justify-self: center;
+    justify-self: start;
   }
   .fids-row__dir {
     grid-area: dir;
   }
   .fids-row__dep {
     grid-area: dep;
-    justify-self: end;
   }
   .fids-st {
     grid-area: status;
-    justify-self: end;
+    justify-self: start;
   }
   .fids-row__loc {
     grid-area: loc;
