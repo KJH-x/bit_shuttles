@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "./schedule-data.js?v=20260902-9";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-1";
 import {
   formatClock,
   formatHM,
@@ -13,10 +13,10 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260902-9";
-import { now, syncClock } from "./lib/time.js?v=20260902-9";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260902-9";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-9";
+} from "./lib/schedule.js?v=20260904-1";
+import { now, syncClock } from "./lib/time.js?v=20260904-1";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-1";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-1";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -604,6 +604,18 @@ function tick() {
   }
 }
 
+/* ===== 西山线路 UI 隐藏：ENABLE_XISHAN 关闭时隐藏筛选按钮/D/E列/西山走廊 ===== */
+function hideXishanUi() {
+  if (ENABLE_XISHAN) return;
+  for (const chip of document.querySelectorAll('.filter-chip[data-route="d"], .filter-chip[data-route="e"]')) {
+    chip.hidden = true;
+  }
+  if (dom.tripColumnD) dom.tripColumnD.hidden = true;
+  if (dom.tripColumnE) dom.tripColumnE.hidden = true;
+  const xishanCorridor = dom.corridorContainer.querySelector('[data-corridor="xishan"]');
+  if (xishanCorridor) xishanCorridor.hidden = true;
+}
+
 function autoScrollFids() {
   const rows = [...dom.fidsBody.querySelectorAll(".fids-row")];
   if (!rows.length) return;
@@ -620,6 +632,7 @@ function autoScrollFids() {
 }
 
 /* ===== Init ===== */
+hideXishanUi();
 bindTheme();
 bindViewSwitch();
 bindChips();
