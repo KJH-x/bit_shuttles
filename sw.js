@@ -1,4 +1,4 @@
-const CACHE_NAME = "bitbus-static-v20260902-6";
+const CACHE_NAME = "bitbus-static-v20260902-7";
 const CORE_ASSETS = [
   "/",
   "/index.html",

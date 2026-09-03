@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "./schedule-data.js?v=20260902-6";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "./schedule-data.js?v=20260902-7";
 import {
   formatClock,
   formatHM,
@@ -12,10 +12,10 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260902-6";
-import { now, syncClock } from "./lib/time.js?v=20260902-6";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260902-6";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-6";
+} from "./lib/schedule.js?v=20260902-7";
+import { now, syncClock } from "./lib/time.js?v=20260902-7";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260902-7";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-7";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -413,7 +413,8 @@ function bindChips() {
 /* ===== FIDS: 全车次、一行一趟、方向/开点/状态/位置 ===== */
 const FIDS_PHASE_CLASS = { wait: "fids-st--wait", urge: "fids-st--urge", dep: "fids-st--dep", arr: "fids-st--arr" };
 const FIDS_ROW_GROUP = { wait: "pre", urge: "pre", dep: "run", arr: "done" };
-const FIDS_ARROW = { a: "→", c: "←", d: "→", e: "←" };
+const FIDS_ARROW_L = { c: "←", e: "←" };
+const FIDS_ARROW_R = { a: "→", d: "→" };
 const FIDS_ROUTE_COLOR = { a: "var(--dir-a)", c: "var(--dir-c)", d: "var(--dir-d)", e: "var(--dir-e)" };
 
 function fidsLocText(trip, now) {
@@ -426,8 +427,8 @@ function fidsRowHtml(trip, now) {
   const group = FIDS_ROW_GROUP[st.phase];
   return `
     <div class="fids-row fids-row--${group}" data-id="${trip.id}">
-      <span class="fids-row__arrow" aria-hidden="true">${FIDS_ARROW[trip.route] || "→"}</span>
-      <span class="fids-row__dot" style="background:${FIDS_ROUTE_COLOR[trip.route] || "var(--dir-a)"}" aria-hidden="true"></span>
+      <span class="fids-row__arrow fids-row__arrow--l" aria-hidden="true">${FIDS_ARROW_L[trip.route] || ""}</span>
+      <span class="fids-row__arrow fids-row__arrow--r" aria-hidden="true">${FIDS_ARROW_R[trip.route] || ""}</span>
       <span class="fids-row__dir">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
       <span class="fids-row__dep">${escapeHtml(trip.dep)}</span>
       <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>

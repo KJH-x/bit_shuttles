@@ -84,7 +84,8 @@ site-footer：数据说明
 | v1.7 | 2026-09-02 | iOS Safari 非 PWA 安装引导（`lib/install-guide.js`，load 后 5s 弹出：长按地址栏→分享→添加到主屏幕，默认作为网页App打开；localStorage 忽略标记）；QQ 内置浏览器提示（`lib/qq-guide.js`，UA 判定 Android/iOS，5s 后提示换系统浏览器，可「知道了」/「复制链接」）；两者互斥（QQ 优先） | 当前 |
 | v1.8 | 2026-09-02 | **二号屏 PIDS**（route `#/PIDS`，hash 路由 + hashchange/pushState 顶部「标准屏 / PIDS」切换）：全车次一行一趟、紧凑排列，方向/开点/状态（等待发车/催促上车/已出发/已到达，文字四色区分；底色三类：未发车 pre / 运行中 run / 已到达 done）；**虚拟站点（checkpoint）**：良乡⇄中关村 途经 京良收费站→杜家坎收费站→六里桥（`CHECKPOINTS`，无实际停靠，`checkpointTimes` 等分估算，待补充精确位置/间距）。注：`_redirects` 200-proxy 会在 CF 端归一化路径并破坏相对资源，故采用 hash 路由 | 当前 |
 | v1.9 | 2026-09-02 | **虚拟站点嵌入运行图 bar**：三个检查点标签直接放进中间轨道条内（同两端「良乡/中关村」样式），删除条下方 checkpoint-strip；位置按**双向时间分布加权平均**重算（京良 25.4% / 杜家坎 41.4% / 六里桥 62.3%，`CHECKPOINTS.pos`）；**校内上车点**（`CAMPUS`）：良乡出发 东校区→北校区→南校区（T-10~T+6），中关村出发 西门→南门；**PIDS 增「位置」列**；**发车卡片**：发车后 T~T+6 显示所在上车点、T+6~T+10 显示「已出发」、之后隐藏 | 当前 |
-| v1.10 | 2026-09-02 | **各班次进度改为 li 底色**：`running-item` 的 `-━背景渐变`（route 色 + `--pct`）作为进度条，删除原 `__bar/__fill`；**PIDS 首列前增 2 列**（无表头）：绿色方向箭头（往良乡←、往中关村/西山→）+ 目的地圆点；**到达顺序按时间窗口推进**（`arrivalStopAt`）：中关村 南门→西门、良乡 东校区→北校区→南校区，最后停在南校区/西门；删除 PIDS 底部「虚拟站点」说明文字；PIDS 全称 Passenger Information Display System | 当前 |
+| v1.10 | 2026-09-02 | **各班次进度改为 li 底色**：`running-item` 的 `-━背景渐变`（route 色 + `--pct`）作为进度条，删除原 `__bar/__fill`；**PIDS 首列前增 2 列**（无表头）：左列=左箭头 `←`（往良乡）、右列=右箭头 `→`（往中关村/西山），每行只显示其一，另一列留空；**到达顺序按时间窗口推进**（`arrivalStopAt`）：中关村 南门→西门、良乡 东校区→北校区→南校区，最后停在南校区/西门；删除 PIDS 底部「虚拟站点」说明文字；PIDS 全称 Passenger Information Display System | 当前 |
+| v1.11 | 2026-09-02 | **PIDS 窄屏重排 3 列**（≤768px）：第 0 列=方向箭头（左右两列合并为「arrow」区），第 1 列=方向 `A ➡ B`，第 2 列=时间/状态/位置纵向堆叠（grid-template-areas）；窄屏取消 PIDS 外框（panel）两侧边距并改直角（border-radius:0）；**主视图运行图窄屏**：虚拟站点省略「收费站」后缀（仅 京良/杜家坎/六里桥，`.checkpoint-suffix` 隐藏）且底色/文字对调 | 当前 |
 
 ## 7. 发版 Checklist（防坑）
 

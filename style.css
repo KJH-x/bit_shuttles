@@ -865,7 +865,7 @@ a:hover {
 .fids-table__head,
 .fids-row {
   display: grid;
-  grid-template-columns: 24px 14px 1fr 72px 120px 1fr;
+  grid-template-columns: 24px 24px 1fr 72px 120px 1fr;
   align-items: center;
   gap: 8px;
 }
@@ -877,12 +877,12 @@ a:hover {
   font-size: 1rem;
 }
 
-.fids-row__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  justify-self: center;
-  box-shadow: 0 0 0 2px var(--surface);
+.fids-row__arrow--l {
+  text-align: right;
+}
+
+.fids-row__arrow--r {
+  text-align: left;
 }
 
 .fids-table__head {
@@ -1270,5 +1270,66 @@ a:hover {
   }
   .trip-item__countdown {
     text-align: left;
+  }
+
+  /* PIDS 窄屏：外框去两侧边距 + 直角 */
+  .fids-shell .app-shell {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .fids-shell .panel {
+    margin-left: 0;
+    margin-right: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .fids-table {
+    border-radius: 0;
+  }
+
+  /* PIDS 窄屏重排为 3 列：第0列=方向箭头（两列合并），第一列=A➡B 方向，第二列=时间/状态/位置 */
+  .fids-table__head {
+    display: none;
+  }
+  .fids-row {
+    grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "arrow dir dep"
+      "arrow dir status"
+      "arrow dir loc";
+  }
+  .fids-row__arrow--l,
+  .fids-row__arrow--r {
+    grid-area: arrow;
+    text-align: center;
+    justify-self: center;
+  }
+  .fids-row__dir {
+    grid-area: dir;
+  }
+  .fids-row__dep {
+    grid-area: dep;
+    justify-self: end;
+  }
+  .fids-st {
+    grid-area: status;
+    justify-self: end;
+  }
+  .fids-row__loc {
+    grid-area: loc;
+    justify-self: end;
+    max-width: 100%;
+  }
+
+  /* 主视图运行图窄屏：站点省略为京良/杜家坎/六里桥，底色与文字对调 */
+  .checkpoint-suffix {
+    display: none;
+  }
+  .route-track__checkpoint {
+    background: var(--tag-text);
+    color: var(--accent-light);
+    padding: 2px 6px;
+    font-size: .6rem;
   }
 }
