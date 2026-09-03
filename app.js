@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "./schedule-data.js?v=20260902-5";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "./schedule-data.js?v=20260902-6";
 import {
   formatClock,
   formatHM,
@@ -12,10 +12,10 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260902-5";
-import { now, syncClock } from "./lib/time.js?v=20260902-5";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260902-5";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-5";
+} from "./lib/schedule.js?v=20260902-6";
+import { now, syncClock } from "./lib/time.js?v=20260902-6";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260902-6";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260902-6";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -100,9 +100,10 @@ function bindTheme() {
   });
 }
 
-/* ===== View switch: main ⇄ FIDS (#/FIDS) ===== */
+/* ===== View switch: main ⇄ PIDS (#/PIDS) ===== */
 function isFidsPath() {
-  return location.hash.replace(/^#\/?/, "").toLowerCase() === "fids";
+  const h = location.hash.replace(/^#\/?/, "").toLowerCase();
+  return h === "fids" || h === "pids";
 }
 
 function applyView() {
@@ -119,7 +120,7 @@ function applyView() {
 function bindViewSwitch() {
   for (const btn of dom.viewSwitchBtns) {
     btn.addEventListener("click", () => {
-      const target = btn.dataset.view === "fids" ? "#/FIDS" : "#/";
+      const target = btn.dataset.view === "fids" ? "#/PIDS" : "#/";
       if (location.hash === target || (target === "#/" && location.hash === "")) return;
       location.hash = target;
       applyView();
@@ -229,7 +230,6 @@ function runningItemHtml(trip, now) {
   const elapsed = now - trip.depMs;
   const remaining = trip.arrMs - now;
   const pct = Math.round(trip.progress * 100);
-  const fillCls = trip.rainbow ? "running-item__fill--rainbow" : `running-item__fill--${trip.route}`;
   const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
   const cpLine = cps.length
     ? `<div class="running-item__cp" data-role="checkpoints">${cps.map((cp, i) => {
@@ -238,15 +238,12 @@ function runningItemHtml(trip, now) {
       }).join("")}</div>`
     : "";
   return `
-    <li class="running-item" data-id="${trip.id}">
+    <li class="running-item" data-id="${trip.id}" data-route="${trip.route}" data-rainbow="${trip.rainbow}" style="--pct:${pct}%">
       <div class="running-item__head">
         <span class="running-item__time">${escapeHtml(trip.dep)}</span>
         <span class="running-item__route">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
         ${rainbowTag}
         <span class="running-item__meta"><span data-role="pct">${pct}%</span> · 已行 ${escapeHtml(formatDurationLabel(elapsed))}</span>
-      </div>
-      <div class="running-item__bar" aria-hidden="true">
-        <div class="running-item__fill ${fillCls}" data-role="fill" style="width:${pct}%"></div>
       </div>
       <div class="running-item__foot">
         <span>预计到达 <b>${escapeHtml(formatHM(new Date(trip.arrMs)))}</b></span>
@@ -272,10 +269,9 @@ function renderRunningList(all, now) {
     if (!trip) return;
     const pct = Math.round(trip.progress * 100);
     const remaining = trip.arrMs - now;
-    const fill = li.querySelector('[data-role="fill"]');
     const pctEl = li.querySelector('[data-role="pct"]');
     const remEl = li.querySelector('[data-role="remaining"]');
-    if (fill) fill.style.width = `${pct}%`;
+    li.style.setProperty("--pct", `${pct}%`);
     if (pctEl) pctEl.textContent = `${pct}%`;
     if (remEl) remEl.textContent = `剩余 ${formatDurationLabel(remaining)}`;
     const cpEls = li.querySelector('[data-role="checkpoints"]');
@@ -417,6 +413,8 @@ function bindChips() {
 /* ===== FIDS: 全车次、一行一趟、方向/开点/状态/位置 ===== */
 const FIDS_PHASE_CLASS = { wait: "fids-st--wait", urge: "fids-st--urge", dep: "fids-st--dep", arr: "fids-st--arr" };
 const FIDS_ROW_GROUP = { wait: "pre", urge: "pre", dep: "run", arr: "done" };
+const FIDS_ARROW = { a: "→", c: "←", d: "→", e: "←" };
+const FIDS_ROUTE_COLOR = { a: "var(--dir-a)", c: "var(--dir-c)", d: "var(--dir-d)", e: "var(--dir-e)" };
 
 function fidsLocText(trip, now) {
   const loc = tripLocation(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
@@ -428,6 +426,8 @@ function fidsRowHtml(trip, now) {
   const group = FIDS_ROW_GROUP[st.phase];
   return `
     <div class="fids-row fids-row--${group}" data-id="${trip.id}">
+      <span class="fids-row__arrow" aria-hidden="true">${FIDS_ARROW[trip.route] || "→"}</span>
+      <span class="fids-row__dot" style="background:${FIDS_ROUTE_COLOR[trip.route] || "var(--dir-a)"}" aria-hidden="true"></span>
       <span class="fids-row__dir">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
       <span class="fids-row__dep">${escapeHtml(trip.dep)}</span>
       <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>

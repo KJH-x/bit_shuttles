@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "../schedule-data.js";
-import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel, fidsStatus, checkpointOffsets, checkpointLabel, checkpointTimes, campusStopAt, tripLocation } from "../lib/schedule.js";
+import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel, fidsStatus, checkpointOffsets, checkpointLabel, checkpointTimes, campusStopAt, arrivalStopAt, tripLocation } from "../lib/schedule.js";
 
 const ROUTE_IDS = new Set(ROUTES.map((r) => r.id));
 
@@ -265,7 +265,22 @@ test("campusStopAt: 中关村出发 西门→南门 上车点窗口", () => {
   assert.equal(campusStopAt(trip, depMs + 7 * 60000, CAMPUS.c), null);
 });
 
-test("tripLocation: 校内 / 路上距下一站 / 已到达", () => {
+test("arrivalStopAt: 到达顺序按时间窗口推进，最后停留在末站", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const arrMs = depMs + 60 * 60000;
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs };
+  assert.equal(arrivalStopAt(trip, arrMs + 1 * 60000, CAMPUS.a), "南门");
+  assert.equal(arrivalStopAt(trip, arrMs + 4 * 60000, CAMPUS.a), "西门");
+  assert.equal(arrivalStopAt(trip, arrMs + 61 * 60000, CAMPUS.a), "西门");
+  const tripC = { id: "h", route: "c", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs };
+  assert.equal(arrivalStopAt(tripC, arrMs + 1 * 60000, CAMPUS.c), "东校区");
+  assert.equal(arrivalStopAt(tripC, arrMs + 3 * 60000, CAMPUS.c), "北校区");
+  assert.equal(arrivalStopAt(tripC, arrMs + 5 * 60000, CAMPUS.c), "南校区");
+  assert.equal(arrivalStopAt(tripC, arrMs + 30 * 60000, CAMPUS.c), "南校区");
+  assert.equal(arrivalStopAt(tripC, arrMs - 1 * 60000, CAMPUS.c), null);
+});
+
+test("tripLocation: 校内 / 路上距下一站 / 已到达（停站推进）", () => {
   const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
   const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs: depMs + 60 * 60000 };
   assert.equal(tripLocation(trip, depMs - 5 * 60000, CHECKPOINTS.a, CAMPUS.a).text, "东校区上车点");
@@ -273,9 +288,12 @@ test("tripLocation: 校内 / 路上距下一站 / 已到达", () => {
   assert.equal(road.kind, "road");
   assert.match(road.text, /距/);
   assert.match(road.text, /分钟/);
-  const arrived = tripLocation(trip, depMs + 61 * 60000, CHECKPOINTS.a, CAMPUS.a);
-  assert.equal(arrived.kind, "arrived");
-  assert.match(arrived.text, /南门→西门/);
+  const arr1 = tripLocation(trip, trip.arrMs + 1 * 60000, CHECKPOINTS.a, CAMPUS.a);
+  assert.equal(arr1.kind, "arrived");
+  assert.match(arr1.text, /南门/);
+  const arr2 = tripLocation(trip, trip.arrMs + 15 * 60000, CHECKPOINTS.a, CAMPUS.a);
+  assert.equal(arr2.kind, "arrived");
+  assert.match(arr2.text, /西门/);
 });
 
 test("fidsStatus: 等待发车 / 催促上车 / 已出发 / 已到达 四态", () => {

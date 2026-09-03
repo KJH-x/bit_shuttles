@@ -2,7 +2,7 @@ export const DURATION_MIN = 60;
 
 export const DURATION_BY_ROUTE = {};
 
-export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260902-5";
+export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260902-6";
 
 export const ROUTES = [
   { id: "a", label: "良乡 → 中关村" },
@@ -127,7 +127,10 @@ export const CAMPUS = {
       { until: 3, name: "北校区上车点" },
       { until: 6, name: "南校区上车点" }
     ],
-    arrive: ["南门", "西门"],
+    arrive: [
+      { until: 3, name: "南门" },
+      { until: 6, name: "西门" }
+    ],
     final: { segMin: 20, segKm: 8.9 }
   },
   c: {
@@ -135,7 +138,11 @@ export const CAMPUS = {
       { until: 0, name: "西门上车点" },
       { until: 6, name: "南门上车点" }
     ],
-    arrive: ["东校区", "北校区", "南校区"],
+    arrive: [
+      { until: 2, name: "东校区" },
+      { until: 4, name: "北校区" },
+      { until: 6, name: "南校区" }
+    ],
     final: { segMin: 13, segKm: 6.7 }
   }
 };
