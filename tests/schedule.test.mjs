@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS } from "../schedule-data.js";
+import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "../schedule-data.js";
 import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel, fidsStatus, checkpointOffsets, checkpointLabel, checkpointTimes, campusStopAt, arrivalStopAt, tripLocation } from "../lib/schedule.js";
 
 const ROUTE_IDS = new Set(ROUTES.map((r) => r.id));
@@ -47,10 +47,15 @@ test("weekend schedule data: valid trips on known routes", () => {
     assert.equal(typeof t.rainbow, "boolean", `rainbow must be boolean on ${t.id}`);
     assert.match(t.price, /^¥\d+\.\d{2}$/, `bad price ${t.price} on ${t.id}`);
   }
-  const dTrips = TRIPS_WEEKEND.filter((t) => t.route === "d");
-  const eTrips = TRIPS_WEEKEND.filter((t) => t.route === "e");
-  assert.equal(dTrips.length, 1, "weekend 中关村→西山 has 1 trip (08:00)");
-  assert.equal(eTrips.length, 1, "weekend 西山→中关村 has 1 trip (16:30)");
+});
+
+test("ENABLE_XISHAN off: 往返西山的全部班次被过滤（默认不展示）", () => {
+  assert.equal(ENABLE_XISHAN, false, "西山开关默认关闭（未启用不得展示）");
+  const weekendTrips = activeTrips(new Date(2026, 8, 5, 12, 0, 0));
+  assert.equal(weekendTrips.some((t) => t.route === "d"), false, "中关村→西山 (d) 不应出现");
+  assert.equal(weekendTrips.some((t) => t.route === "e"), false, "西山→中关村 (e) 不应出现");
+  const weekdayTrips = activeTrips(new Date(2026, 8, 2, 12, 0, 0));
+  assert.equal(weekdayTrips.some((t) => t.route === "d" || t.route === "e"), false);
 });
 
 test("isWeekend / activeTrips: weekend vs weekday switching", () => {
@@ -60,8 +65,9 @@ test("isWeekend / activeTrips: weekend vs weekday switching", () => {
   assert.equal(isWeekend(sat), true);
   assert.equal(isWeekend(sun), true);
   assert.equal(isWeekend(wed), false);
-  assert.equal(activeTrips(sat), TRIPS_WEEKEND);
   assert.equal(activeTrips(wed), TRIPS);
+  assert.ok(activeTrips(sat).length > 0, "周末应有班次（过滤掉西山 d/e 后仍非空）");
+  assert.ok(activeTrips(sat).every((t) => t.route === "a" || t.route === "c"), "周末启用西山前仅含 a/c");
 });
 
 test("schedule data: no 回龙观 trips remain", () => {

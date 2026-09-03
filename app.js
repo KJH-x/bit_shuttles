@@ -597,7 +597,7 @@ function tick() {
   renderRunningList(todayAll, n);
   renderUpcoming(displayAll, n);
   renderStatus(displayAll, n);
-  renderFids(displayAll, n);
+  renderFids(todayAll, n);
   if (state.fidsAutoScroll) {
     autoScrollFids();
     state.fidsAutoScroll = false;

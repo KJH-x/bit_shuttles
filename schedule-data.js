@@ -103,8 +103,16 @@ export function isWeekend(date = new Date()) {
   return day === 0 || day === 6;
 }
 
+// 西山往返班次（中关村⇄西山，route d/e）主开关。
+// 默认关闭：在要求启用之前，往返西山的全部班次不得被展示。
+// 启用：改为 true 并同步 bump 各文件 ?v= 版本号。
+export const ENABLE_XISHAN = false;
+
 export function activeTrips(date = new Date()) {
-  return isWeekend(date) ? TRIPS_WEEKEND : TRIPS;
+  const base = isWeekend(date) ? TRIPS_WEEKEND : TRIPS;
+  if (ENABLE_XISHAN) return base;
+  // 默认关闭西山：返回不含 d/e 的班次。工作日本无 d/e，直接复用原数组引用（保持测试/调用方对引用相等的依赖）。
+  return base.some((t) => t.route === "d" || t.route === "e") ? base.filter((t) => t.route !== "d" && t.route !== "e") : base;
 }
 
 export const CHECKPOINTS = {
