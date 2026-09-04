@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-9";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-10";
 import {
   formatClock,
   formatHM,
@@ -13,10 +13,10 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-9";
-import { now, syncClock } from "./lib/time.js?v=20260904-9";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-9";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-9";
+} from "./lib/schedule.js?v=20260904-10";
+import { now, syncClock } from "./lib/time.js?v=20260904-10";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-10";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-10";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -25,7 +25,7 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-9";
+} from "./lib/availability.js?v=20260904-10";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -559,7 +559,8 @@ function updateTripAvail(li, trip) {
   avEl.className = `trip-item__avail avail--${view.color}`;
   const ageMs = tripAgeMs(trip.route, trip.dep) ?? availAgeMs();
   const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
-  avEl.innerHTML = `<span class="trip-item__avail-l">余</span><span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
+  const label = view.value === "售罄" ? "" : "<span class=\"trip-item__avail-l\">余</span>";
+  avEl.innerHTML = `${label}<span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
 }
 
 function renderList(ul, list, now, highlightNext) {
