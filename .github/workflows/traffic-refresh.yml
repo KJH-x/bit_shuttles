@@ -1,0 +1,11 @@
+name: traffic-refresh
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: trigger amap refresh
+        run: curl -fsS -m 60 "https://bitbus.nslc.top/api/traffic?refresh=1&token=${{ secrets.TRAFFIC_REFRESH_TOKEN }}"

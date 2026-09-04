@@ -129,20 +129,20 @@ test("lookupDuration: uses nearest interpolation for off-grid times", () => {
   assert.equal(lookupDuration("20:40", profile), 48);
 });
 
-test("tripDuration: durations over 1 hour are capped at 60 min", () => {
+test("tripDuration: durations over 1 hour are no longer capped", () => {
   const tripC = { id: "c1", route: "c", dep: "17:20", price: "¥10.00", rainbow: false };
-  assert.equal(tripDuration(tripC, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 60);
+  assert.equal(tripDuration(tripC, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 80);
   const tripA = { id: "a1", route: "a", dep: "17:20", price: "¥10.00", rainbow: false };
   assert.equal(tripDuration(tripA, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 53);
 });
 
-test("tripStatus: route c arrival reflects capped profile duration", () => {
+test("tripStatus: route c arrival reflects uncapped profile duration", () => {
   const tripC = { id: "c16", route: "c", dep: "17:20", price: "¥10.00", rainbow: false };
   const depMs = depToMs("17:20", new Date("2026-09-01T16:00:00+08:00"));
   const st = tripStatus(tripC, depMs + 30 * 60000, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
-  assert.equal(st.arrMs - st.depMs, 60 * 60000);
+  assert.equal(st.arrMs - st.depMs, 80 * 60000);
   assert.equal(st.status, "running");
-  assert.ok(Math.abs(st.progress - 0.5) < 1e-9);
+  assert.ok(Math.abs(st.progress - 0.375) < 1e-9);
 });
 
 test("computeAll returns one entry per trip", () => {

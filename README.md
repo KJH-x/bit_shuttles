@@ -17,6 +17,11 @@
   - **发车后 T+10 分钟内仍显示**：T~T+5「已发车 · 可能还在上车点」，T+5~T+10「已发车」，T+10 后隐藏。
   - 筛选：全部 / 良乡→中关村 / 中关村→良乡 / **除彩虹巴士**。
 - **实时路线耗时（高德）**：两个静态链接按钮（良乡→中关村 / 中关村→良乡），区块上方一条灰色虚线分隔；**桌面端**（排除 iPad/Android pad）点击按钮才弹出一个二维码气泡提示用手机扫码打开导航（不再常显）。
+- **高德实时路况（`/api/traffic`）**：Pages Function 免鉴权拉取 `m.amap.com` driving.json（iPhone UA + Referer，无登录/无 key/无 cookie），返回两条直连线路（良乡⇄中关村 36.5/36.8km）的**实时预计耗时 + 三分段路况色带**：
+  - **读模式**：`GET /api/traffic` → R2 缓存直出 `{ available, fetchedAt, dirs:{ fwd, rev } }`，前端每 60s 轮询；
+  - **刷新模式**：`GET /api/traffic?refresh=1&token=...` 由 **GitHub Actions cron**（`.github/workflows/traffic-refresh.yml`，每 10 分钟 + 手动 dispatch）触发，服务端 timing-safe 鉴权 `TRAFFIC_REFRESH_TOKEN` + **5 分钟限频闸**，单方向失败保留旧值；Pages 不支持 Cron Triggers，故用 Actions 作 cron 载体；
+  - **实时 ETA 仅在数据被拉取后生效**（数据龄 ≤30min，过期自动回退静态耗时表），生效时**所有需运行时间的计算**（运行图 marker 按段位移、预计到达、剩余、PIDS 进度、检查点）自动使用实时值；运行图 `lane--a/c` 叠加半透明路况色带（fwd 正向 S1→S2→S3、rev 反向），高德区显示「路况更新于 HH:MM · N 分钟前」；
+  - **只取直连线路**（容差 ±0.3km，无匹配取最小耗时）；**严格丢弃** cost/红绿灯数/路径详情（不输出不存储）；**耗时不再 1 小时封顶**（实时与静态均不截断）。
 - **余票实时查询（`/api/availability`）**：Pages Function 带签名访问 BIT 班车预约源站（`hqapp1.bit.edu.cn`），返回每趟余票 `available/total/pct`：
   - **3h 可见窗口**：`0 ≤ 发车-now ≤ 3h` 的付费班次显示具体余票数字，颜色按真实余量（≥15 绿 / 6–14 黄 / ≤5 红）；售罄（余票=0）显示「售罄」红色；
   - **付费 >3h 开售前**：只显示百分比（无具体数字），颜色同样按真实余量；
@@ -66,7 +71,7 @@
 ## 修改耗时
 
 - 耗时表原始预测值保留在 `lib/duration-profiles.js`（含重叠点），按发车时间**邻近插值**。
-- **超过 1 小时一律按 1 小时计**（`MAX_DURATION_MIN = 60`，理由：公交专用道，班车通常比轿车快）。灰色小字提示：预测时间仅考虑路况平均拥堵，无法保证突发事件影响，请以实际运行为准。
+- **耗时不再封顶**：实时与静态耗时均允许超过 60 分钟；高德实时路况可用时优先用实时值（其余保持静态插值）。灰色小字提示：预测时间仅考虑路况平均拥堵，无法保证突发事件影响，请以实际运行为准。
 
 ```js
 export const DURATION_MIN = 60;            // 默认耗时（分钟）
@@ -74,11 +79,11 @@ export const DURATION_BY_ROUTE = {
   a: 60,                                    // 按线路覆盖：a=良乡→中关村
   c: 60                                     // c=中关村→良乡
 };
-// 或在某条班次上单独覆盖（仍受 1 小时封顶约束）：
+// 或在某条班次上单独覆盖（不再封顶）：
 { id: "a3", route: "a", dep: "07:30", price: "¥10.00", rainbow: true, dur: 70 }
 ```
 
-优先级：`trip.dur` > `DURATION_BY_ROUTE[route]` > 耗时表邻近插值 > `DURATION_MIN`，最终统一 `min(…, 60)`。
+优先级：`trip.dur` > `DURATION_BY_ROUTE[route]` > 耗时表邻近插值 > `DURATION_MIN`，耗时不再封顶；实时路况可用时用实时值（其余保持静态插值）。
 
 ## 本地预览与测试
 
@@ -95,7 +100,7 @@ node --test tests/*.test.mjs
 
 ## 发版注意
 
-改代码后记得**同步 bump 版本号**（`index.html`、`app.js`、`schedule-data.js` 中的 `?v=20260904-N`、`sw.js` 的 `CACHE_NAME`），否则可能吃到 zone 层旧缓存。详见 `docs/ARCHITECTURE.md` §7。首次启用余票功能需：① Pages 项目绑定 R2 `campus-shuttle-avail`（`wrangler.toml` 已声明）；② 设置生产环境变量 `SCHOOL_SECRET`（Pages secret，勿明文）与 `SCHOOL_SCHEME_ORDER`（默认 `https,http`）。
+改代码后记得**同步 bump 版本号**（`index.html`、`app.js`、`schedule-data.js` 中的 `?v=20260904-N`、`sw.js` 的 `CACHE_NAME`），否则可能吃到 zone 层旧缓存。详见 `docs/ARCHITECTURE.md` §7。首次启用余票功能需：① Pages 项目绑定 R2 `campus-shuttle-avail`（`wrangler.toml` 已声明）；② 设置生产环境变量 `SCHOOL_SECRET`（Pages secret，勿明文）与 `SCHOOL_SCHEME_ORDER`（默认 `https,http`）。实时路况（v1.17）另需：③ Pages 生产环境变量 `TRAFFIC_REFRESH_TOKEN`（与 GitHub repo secret 同名同值）；④ GitHub 仓库 Settings → Secrets 添加 `TRAFFIC_REFRESH_TOKEN`（供 `.github/workflows/traffic-refresh.yml` 每 10 分钟触发 refresh 端点）。
 
 ## 部署
 

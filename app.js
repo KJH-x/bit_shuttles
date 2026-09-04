@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-10";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-11";
 import {
   formatClock,
   formatHM,
@@ -13,10 +13,10 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-10";
-import { now, syncClock } from "./lib/time.js?v=20260904-10";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-10";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-10";
+} from "./lib/schedule.js?v=20260904-11";
+import { now, syncClock } from "./lib/time.js?v=20260904-11";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-11";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-11";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -25,7 +25,8 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-10";
+} from "./lib/availability.js?v=20260904-11";
+import { initTraffic, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-11";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -59,6 +60,7 @@ const dom = {
   runningTitle: document.getElementById("runningTitle"),
   amapButtons: [...document.querySelectorAll(".amap-links__btn")],
   amapQr: document.getElementById("amapQr"),
+  trafficLiveNote: document.getElementById("trafficLiveNote"),
   fidsBody: document.getElementById("fidsBody"),
   tripColumnA: document.getElementById("tripColumnA"),
   tripColumnC: document.getElementById("tripColumnC"),
@@ -81,7 +83,8 @@ const state = {
   fidsAutoScroll: false,
   viewDate: null, // null=跟随真实今天；否则 'YYYY-MM-DD'
   availMap: new Map(), // `${route}|${dep}` → avail
-  traffic: null
+  traffic: null,
+  trafficLive: null
 };
 
 function dayKind(date) {
@@ -180,6 +183,20 @@ function renderTraffic() {
   badge.textContent = `${arrow} 今日客流 ${t.delta} · ${label}`;
   badge.classList.toggle("traffic-badge--red", t.color === "red");
   badge.classList.toggle("traffic-badge--green", t.color === "green");
+}
+
+// 高德路况数据龄提示：实时数据存在 fwd/rev 任一时显示「更新于 HH:MM · N 分钟前」，否则隐藏
+function renderTrafficNote(now) {
+  const note = dom.trafficLiveNote;
+  if (!note) return;
+  const live = state.trafficLive;
+  if (live && live.available && live.dirs && (live.dirs.fwd || live.dirs.rev) && typeof live.fetchedAt === "number") {
+    const ageMin = Math.max(1, Math.round((now - live.fetchedAt) / 60000));
+    note.textContent = `路况更新于 ${formatHM(new Date(live.fetchedAt))} · ${ageMin} 分钟前`;
+    note.hidden = false;
+  } else {
+    note.hidden = true;
+  }
 }
 
 function activeTripsForNow() {
@@ -385,7 +402,7 @@ function makeBusMarker(trip, now) {
 }
 
 function updateBusMarker(el, trip, now) {
-  const p = trip.progress * 100;
+  const p = markerProgress(trip, state.trafficLive, now) * 100;
   const left = fwdTrip(trip) ? p : 100 - p;
   el.style.left = `${left}%`;
   const remaining = trip.arrMs - now;
@@ -408,6 +425,8 @@ function renderTrack(all, now) {
 
     for (const rid of [corridor.fwd, corridor.rev]) {
       const lane = block.querySelector(`[data-lane="${rid}"]`);
+      const seg = trafficForRoute(state.trafficLive, rid);
+      lane.style.background = seg ? laneGradient(seg.segments, rid) : "";
       const trips = corridorTrips.filter((t) => t.route === rid);
       const current = [...lane.querySelectorAll(".bus-marker")];
       const currentIds = new Set(current.map((el) => el.dataset.id));
@@ -726,7 +745,11 @@ function registerSW() {
 
 /* ===== Tick loop ===== */
 function computeForDate(trips, n, refDate) {
-  return computeAll(trips, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, refDate);
+  const injected = trips.map((t) => {
+    const dur = realtimeDurMin(state.trafficLive, t.route, n);
+    return dur != null ? { ...t, dur } : t;
+  });
+  return computeAll(injected, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, refDate);
 }
 
 function tick() {
@@ -744,6 +767,7 @@ function tick() {
   renderUpcoming(displayAll, n);
   renderStatus(displayAll, n);
   renderFids(todayAll, n);
+  renderTrafficNote(n);
   renderDateNav();
   if (state.fidsAutoScroll) {
     autoScrollFids();
@@ -787,6 +811,13 @@ bindDetailToggle();
 bindAmapQr();
 bindDateNav();
 initAvailBridge();
+initTraffic((data) => {
+  state.trafficLive = data;
+  state.upcomingSig = "";
+  state.runningSig = "";
+  state.fidsSig = "";
+  tick();
+});
 document.addEventListener("click", () => {
   document.querySelectorAll(".bus-marker--active").forEach((m) => m.classList.remove("bus-marker--active"));
 });
