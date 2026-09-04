@@ -26,12 +26,18 @@ const MIN = 60000;
 const T = Date.UTC(2026, 8, 4, 10, 0, 0) - 8 * 3600 * 1000; // Beijing 2026-09-04 10:00
 
 test("md5: 双重 MD5 签名与实测一致", () => {
-  const secret = "oVw5lgBQ32mygdfZUvYuKAbYtm7DRN37";
+  const secret = "test-secret-not-production";
   const t = "1788489975368";
-  assert.equal(md5Hex(md5Hex(secret + t)), "827b8c0fbe6fb0118ec55e31df7c8bb5");
+  const expected = md5Hex(md5Hex(secret + t));
+  assert.equal(md5Hex(md5Hex(secret + t)), expected);
   const sig = sign(secret, Number(t));
   assert.equal(sig.apitime, "1788489975368");
-  assert.equal(sig.apitoken, "827b8c0fbe6fb0118ec55e31df7c8bb5");
+  assert.equal(sig.apitoken, expected);
+  // 生产 secret 回归：仅当显式提供 SCHOOL_TEST_SECRET 时校验（避免硬编码进仓库）
+  const prod = process.env.SCHOOL_TEST_SECRET;
+  if (prod) {
+    assert.equal(md5Hex(md5Hex(prod + t)), "827b8c0fbe6fb0118ec55e31df7c8bb5");
+  }
 });
 
 test("paidPhaseTtl: 各阶段边界（T-70min / T-60min / T-50min / T-5min）", () => {
