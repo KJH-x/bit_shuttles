@@ -12,3 +12,4 @@ Thumbs.db
 *~
 tmp/
 docs/PLAN-live-availability.md
+.dev.vars
