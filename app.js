@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-8";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-9";
 import {
   formatClock,
   formatHM,
@@ -13,17 +13,19 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-8";
-import { now, syncClock } from "./lib/time.js?v=20260904-8";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-8";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-8";
+} from "./lib/schedule.js?v=20260904-9";
+import { now, syncClock } from "./lib/time.js?v=20260904-9";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-9";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-9";
 import {
   initAvail,
   setDate as setAvailDate,
+  refreshUpcoming,
   mainAvailText,
   pidsAvailText,
+  tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-8";
+} from "./lib/availability.js?v=20260904-9";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -152,9 +154,10 @@ function initAvailBridge() {
       state.traffic = null;
     } else {
       const map = new Map();
-      for (const t of data.trips || []) map.set(`${t.route}|${t.dep}`, t);
+      const d = data.date || beijingTodayStr();
+      for (const t of data.trips || []) map.set(`${d}|${t.route}|${t.dep}`, t);
       state.availMap = map;
-      state.traffic = data.date === beijingTodayStr() ? data.traffic : null;
+      state.traffic = d === beijingTodayStr() ? data.traffic : null;
     }
     renderTraffic();
     state.upcomingSig = "";
@@ -545,7 +548,7 @@ function tripItemHtml(trip, now, isNext) {
 function updateTripAvail(li, trip) {
   const avEl = li.querySelector('[data-role="avail"]');
   if (!avEl) return;
-  const key = `${trip.route}|${trip.dep}`;
+  const key = `${viewDateStr()}|${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
   const view = mainAvailText({ ...trip, avail: a });
   if (!view) {
@@ -554,7 +557,7 @@ function updateTripAvail(li, trip) {
     return;
   }
   avEl.className = `trip-item__avail avail--${view.color}`;
-  const ageMs = availAgeMs();
+  const ageMs = tripAgeMs(trip.route, trip.dep) ?? availAgeMs();
   const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
   avEl.innerHTML = `<span class="trip-item__avail-l">余</span><span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
 }
@@ -610,6 +613,13 @@ function renderUpcoming(all, now) {
     columns[id].hidden = trips.length === 0;
     renderList(lists[id], trips, now, true);
   }
+  // 逐车拉取余票：最近班次优先；stale-while-revalidate（立刻返缓存，过期后台刷）
+  const d = viewDateStr();
+  refreshUpcoming(d, list, (route, dep, tripData) => {
+    state.availMap.set(`${d}|${route}|${dep}`, tripData);
+    const row = [...dom.tripListA.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListC.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListD.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListE.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`)];
+    for (const li of row) updateTripAvail(li, { route, dep });
+  });
 }
 
 /* ===== Status line ===== */
@@ -685,7 +695,7 @@ function renderFids(all, now) {
     const st = fidsStatus(trip, now);
     row.className = `fids-row fids-row--${FIDS_ROW_GROUP[st.phase]}`;
     row.style.setProperty("--pct", `${st.phase === "dep" ? Math.round(trip.progress * 100) : 0}%`);
-    const key = `${trip.route}|${trip.dep}`;
+    const key = `${beijingTodayStr()}|${trip.route}|${trip.dep}`;
     const a = state.availMap.get(key) || null;
     const pv = pidsAvailText({ ...trip, avail: a });
     const pctEl = row.querySelector('[data-role="fids-pct"]');

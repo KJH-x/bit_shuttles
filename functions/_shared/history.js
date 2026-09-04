@@ -17,6 +17,8 @@ import {
 
 export const SNAPSHOT_PREFIX = "avail/";
 export const LIVE_PREFIX = "avail/live/";
+export const META_PREFIX = "avail/meta/";
+export const TRIP_PREFIX = "avail/trip/";
 export const CUMULATIVE_KEY = "avail/cumulative.json";
 export const LAST_FAILED_KEY = "avail/last-failed.json";
 const SNAPSHOT_KEEP_DAYS = 7;
@@ -53,6 +55,24 @@ export async function writeLiveCache(bucket, date, payload) {
 
 export async function readLiveCache(bucket, date) {
   return readJson(bucket, `${LIVE_PREFIX}${date}.json`);
+}
+
+// 每日 get-list 元数据缓存（id/name/dep/type/price 映射，1h TTL）
+export async function writeMetaCache(bucket, date, rows) {
+  await writeJson(bucket, `${META_PREFIX}${date}.json`, { date, savedAt: Date.now(), rows });
+}
+
+export async function readMetaCache(bucket, date) {
+  return readJson(bucket, `${META_PREFIX}${date}.json`);
+}
+
+// 单趟余票缓存（stale-while-revalidate 用）
+export async function writeTripCache(bucket, date, route, dep, data) {
+  await writeJson(bucket, `${TRIP_PREFIX}${date}/${route}-${dep}.json`, { ...data, fetchedAt: Date.now() });
+}
+
+export async function readTripCache(bucket, date, route, dep) {
+  return readJson(bucket, `${TRIP_PREFIX}${date}/${route}-${dep}.json`);
 }
 
 export async function readCumulative(bucket) {
