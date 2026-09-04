@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-2";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-10";
 import {
   formatClock,
   formatHM,
@@ -13,10 +13,19 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-2";
-import { now, syncClock } from "./lib/time.js?v=20260904-2";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-2";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-2";
+} from "./lib/schedule.js?v=20260904-10";
+import { now, syncClock } from "./lib/time.js?v=20260904-10";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-10";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-10";
+import {
+  initAvail,
+  setDate as setAvailDate,
+  refreshUpcoming,
+  mainAvailText,
+  pidsAvailText,
+  tripAgeMs,
+  availAgeMs
+} from "./lib/availability.js?v=20260904-10";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -34,8 +43,12 @@ const dom = {
   viewFids: document.getElementById("view-fids"),
   viewSwitchBtns: [...document.querySelectorAll(".view-switch__btn")],
   nextStatus: document.getElementById("nextStatus"),
+  trafficBadge: document.getElementById("trafficBadge"),
   resultsStatus: document.getElementById("resultsStatus"),
   themeSelect: document.getElementById("themeSelect"),
+  datePrev: document.getElementById("datePrev"),
+  dateNext: document.getElementById("dateNext"),
+  dateLabel: document.getElementById("dateLabel"),
   routeChips: document.getElementById("routeChips"),
   trackMain: document.getElementById("trackMain"),
   corridorContainer: document.getElementById("corridors"),
@@ -65,7 +78,10 @@ const state = {
   runningSig: "",
   upcomingSig: "",
   fidsSig: "",
-  fidsAutoScroll: false
+  fidsAutoScroll: false,
+  viewDate: null, // null=跟随真实今天；否则 'YYYY-MM-DD'
+  availMap: new Map(), // `${route}|${dep}` → avail
+  traffic: null
 };
 
 function dayKind(date) {
@@ -75,6 +91,95 @@ function dayKind(date) {
 function badgeText(refDate, nowDate) {
   const sameDay = refDate.getFullYear() === nowDate.getFullYear() && refDate.getMonth() === nowDate.getMonth() && refDate.getDate() === nowDate.getDate();
   return (sameDay ? "" : "明日 · ") + dayKind(refDate);
+}
+
+function beijingTodayStr() {
+  return new Date(now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function viewDateStr() {
+  return state.viewDate || beijingTodayStr();
+}
+
+function dateFromStr(s) {
+  return new Date(s + "T12:00:00+08:00");
+}
+
+function fmtDateLabel(s) {
+  const today = beijingTodayStr();
+  if (s === today) return "今日";
+  const d = dateFromStr(s);
+  const t = dateFromStr(today);
+  const diffDays = Math.round((d - t) / 86400000);
+  const wk = ["日", "一", "二", "三", "四", "五", "六"][d.getDay()];
+  if (diffDays === 1) return `明日 · 周${wk}`;
+  if (diffDays === -1) return `昨日 · 周${wk}`;
+  return `${s.slice(5).replace("-", "/")} · 周${wk}`;
+}
+
+function shiftViewDate(delta) {
+  const d = dateFromStr(viewDateStr());
+  d.setDate(d.getDate() + delta);
+  state.viewDate = d.toISOString().slice(0, 10);
+  setAvailDate(state.viewDate);
+  state.upcomingSig = "";
+  state.fidsSig = "";
+  renderDateNav();
+  tick();
+}
+
+function renderDateNav() {
+  const s = viewDateStr();
+  dom.dateLabel.textContent = fmtDateLabel(s);
+  dom.dateNext.disabled = s >= beijingTodayStr();
+  dom.dateLabel.title = state.viewDate ? "点击返回今日" : "今日";
+}
+
+function bindDateNav() {
+  dom.datePrev.addEventListener("click", () => shiftViewDate(-1));
+  dom.dateNext.addEventListener("click", () => shiftViewDate(1));
+  dom.dateLabel.addEventListener("click", () => {
+    state.viewDate = null;
+    setAvailDate(beijingTodayStr());
+    state.upcomingSig = "";
+    state.fidsSig = "";
+    renderDateNav();
+    tick();
+  });
+}
+
+function initAvailBridge() {
+  initAvail((data) => {
+    if (!data) {
+      state.traffic = null;
+    } else {
+      const map = new Map();
+      const d = data.date || beijingTodayStr();
+      for (const t of data.trips || []) map.set(`${d}|${t.route}|${t.dep}`, t);
+      state.availMap = map;
+      state.traffic = d === beijingTodayStr() ? data.traffic : null;
+    }
+    renderTraffic();
+    state.upcomingSig = "";
+    state.fidsSig = "";
+    tick();
+  });
+}
+
+function renderTraffic() {
+  const t = state.traffic;
+  const badge = dom.trafficBadge;
+  if (!badge) return;
+  if (!t || !t.dir) {
+    badge.hidden = true;
+    return;
+  }
+  const arrow = t.dir === "up" ? "▲" : "▼";
+  const label = t.dir === "up" ? "客流较同期升高" : "客流较同期降低";
+  badge.hidden = false;
+  badge.textContent = `${arrow} 今日客流 ${t.delta} · ${label}`;
+  badge.classList.toggle("traffic-badge--red", t.color === "red");
+  badge.classList.toggle("traffic-badge--green", t.color === "green");
 }
 
 function activeTripsForNow() {
@@ -424,7 +529,7 @@ function tripItemHtml(trip, now, isNext) {
   const soon = trip.depMs - now <= 10 * 60000;
   const info = ticketInfo(trip, now);
   return `
-    <li class="trip-item${isNext ? " trip-item--next" : ""}" data-id="${trip.id}">
+    <li class="trip-item${isNext ? " trip-item--next" : ""}" data-id="${trip.id}" data-route="${trip.route}" data-dep="${escapeHtml(trip.dep)}">
       <span class="trip-item__row1">
         <span class="trip-item__time">${escapeHtml(trip.dep)}</span>
         ${priceTagHtml(trip.price)}
@@ -435,8 +540,27 @@ function tripItemHtml(trip, now, isNext) {
         ${rainbowTag}
       </span>
       <span class="trip-item__countdown${soon ? " trip-item__countdown--soon" : ""}" data-role="countdown">—</span>
+      <span class="trip-item__avail" data-role="avail"></span>
     </li>
   `;
+}
+
+function updateTripAvail(li, trip) {
+  const avEl = li.querySelector('[data-role="avail"]');
+  if (!avEl) return;
+  const key = `${viewDateStr()}|${trip.route}|${trip.dep}`;
+  const a = state.availMap.get(key) || null;
+  const view = mainAvailText({ ...trip, avail: a });
+  if (!view) {
+    avEl.textContent = "";
+    avEl.className = "trip-item__avail";
+    return;
+  }
+  avEl.className = `trip-item__avail avail--${view.color}`;
+  const ageMs = tripAgeMs(trip.route, trip.dep) ?? availAgeMs();
+  const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
+  const label = view.value === "售罄" ? "" : "<span class=\"trip-item__avail-l\">余</span>";
+  avEl.innerHTML = `${label}<span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
 }
 
 function renderList(ul, list, now, highlightNext) {
@@ -451,6 +575,7 @@ function renderList(ul, list, now, highlightNext) {
   ul.querySelectorAll("li").forEach((li) => {
     const trip = list.find((t) => t.id === li.dataset.id);
     if (!trip) return;
+    updateTripAvail(li, trip);
     const cd = li.querySelector('[data-role="countdown"]');
     if (cd) {
       if (now < trip.depMs) {
@@ -489,6 +614,13 @@ function renderUpcoming(all, now) {
     columns[id].hidden = trips.length === 0;
     renderList(lists[id], trips, now, true);
   }
+  // 逐车拉取余票：最近班次优先；stale-while-revalidate（立刻返缓存，过期后台刷）
+  const d = viewDateStr();
+  refreshUpcoming(d, list, (route, dep, tripData) => {
+    state.availMap.set(`${d}|${route}|${dep}`, tripData);
+    const row = [...dom.tripListA.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListC.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListD.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListE.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`)];
+    for (const li of row) updateTripAvail(li, { route, dep });
+  });
 }
 
 /* ===== Status line ===== */
@@ -517,8 +649,8 @@ function bindChips() {
       c.classList.toggle("filter-chip--active", active);
       c.setAttribute("aria-pressed", String(active));
     });
-    const ctx = activeTripsForNow();
-    renderUpcoming(computeAll(ctx.trips, now(), DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, ctx.refDate), now());
+    const refDate = state.viewDate ? dateFromStr(state.viewDate) : activeTripsForNow().refDate;
+    renderUpcoming(computeForDate(activeTrips(refDate), now(), refDate), now());
   });
 }
 
@@ -539,11 +671,12 @@ function fidsRowHtml(trip, now) {
   const group = FIDS_ROW_GROUP[st.phase];
   const pct = st.phase === "dep" ? Math.round(trip.progress * 100) : 0;
   return `
-    <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" style="--pct:${pct}%">
+    <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" data-dep="${escapeHtml(trip.dep)}" style="--pct:${pct}%">
       <span class="fids-row__arrow fids-row__arrow--l" aria-hidden="true">${FIDS_ARROW_L[trip.route] || ""}</span>
       <span class="fids-row__arrow fids-row__arrow--r" aria-hidden="true">${FIDS_ARROW_R[trip.route] || ""}</span>
       <span class="fids-row__dir">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
       <span class="fids-row__dep">${escapeHtml(trip.dep)}</span>
+      <span class="fids-row__pct" data-role="fids-pct">—</span>
       <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>
       <span class="fids-row__loc" data-role="fids-loc">${escapeHtml(fidsLocText(trip, now))}</span>
     </div>
@@ -563,6 +696,14 @@ function renderFids(all, now) {
     const st = fidsStatus(trip, now);
     row.className = `fids-row fids-row--${FIDS_ROW_GROUP[st.phase]}`;
     row.style.setProperty("--pct", `${st.phase === "dep" ? Math.round(trip.progress * 100) : 0}%`);
+    const key = `${beijingTodayStr()}|${trip.route}|${trip.dep}`;
+    const a = state.availMap.get(key) || null;
+    const pv = pidsAvailText({ ...trip, avail: a });
+    const pctEl = row.querySelector('[data-role="fids-pct"]');
+    if (pctEl) {
+      pctEl.textContent = pv.text;
+      pctEl.className = `fids-row__pct${pv.color ? ` avail--${pv.color}` : ""}`;
+    }
     const el = row.querySelector('[data-role="fids-status"]');
     if (el) {
       el.textContent = st.label;
@@ -584,12 +725,17 @@ function registerSW() {
 }
 
 /* ===== Tick loop ===== */
+function computeForDate(trips, n, refDate) {
+  return computeAll(trips, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, refDate);
+}
+
 function tick() {
   const n = now();
   const nowDate = new Date(n);
-  const display = activeTripsForNow();
-  const displayAll = computeAll(display.trips, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, display.refDate);
-  const todayAll = computeAll(activeTrips(nowDate), n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, nowDate);
+  const todayStr = beijingTodayStr();
+  const display = state.viewDate ? { trips: activeTrips(dateFromStr(state.viewDate)), refDate: dateFromStr(state.viewDate) } : activeTripsForNow();
+  const displayAll = computeForDate(display.trips, n, display.refDate);
+  const todayAll = computeForDate(activeTrips(nowDate), n, nowDate);
   dom.clock.textContent = formatClock(nowDate);
   dom.clock.setAttribute("datetime", nowDate.toISOString());
   dom.scheduleBadge.textContent = badgeText(display.refDate, nowDate);
@@ -598,6 +744,7 @@ function tick() {
   renderUpcoming(displayAll, n);
   renderStatus(displayAll, n);
   renderFids(todayAll, n);
+  renderDateNav();
   if (state.fidsAutoScroll) {
     autoScrollFids();
     state.fidsAutoScroll = false;
@@ -638,6 +785,8 @@ bindViewSwitch();
 bindChips();
 bindDetailToggle();
 bindAmapQr();
+bindDateNav();
+initAvailBridge();
 document.addEventListener("click", () => {
   document.querySelectorAll(".bus-marker--active").forEach((m) => m.classList.remove("bus-marker--active"));
 });

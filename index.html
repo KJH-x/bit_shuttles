@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260904-2">
+  <link rel="stylesheet" href="style.css?v=20260904-10">
 </head>
 <body>
   <a href="#view-main" class="skip-link">跳转到主内容</a>
@@ -36,6 +36,7 @@
   <main id="view-main" class="app-shell">
     <section class="toolbar" aria-label="工具栏">
       <div class="toolbar__status" id="nextStatus" role="status" aria-live="polite">加载中…</div>
+      <span class="traffic-badge" id="trafficBadge" hidden></span>
       <label for="themeSelect" class="theme-label">
         <span>主题</span>
         <select id="themeSelect">
@@ -106,7 +107,16 @@
     </section>
 
     <section class="panel" aria-labelledby="upcomingTitle">
-      <h2 class="panel__title" id="upcomingTitle">即将开行</h2>
+      <div class="panel__head panel__head--upcoming">
+        <h2 class="panel__title" id="upcomingTitle">即将开行</h2>
+        <div class="upcoming-controls">
+          <div class="date-nav" role="group" aria-label="切换日期">
+            <button class="date-nav__btn" id="datePrev" type="button" aria-label="前一天">‹</button>
+            <span class="date-nav__label" id="dateLabel" role="status">今日</span>
+            <button class="date-nav__btn" id="dateNext" type="button" aria-label="后一天">›</button>
+          </div>
+        </div>
+      </div>
       <div class="filter-chips" id="routeChips" role="group" aria-label="按方向筛选">
         <button class="filter-chip filter-chip--active" data-route="all" aria-pressed="true" type="button">全部</button>
         <button class="filter-chip" data-route="a" aria-pressed="false" type="button">良乡 → 中关村</button>
@@ -149,12 +159,13 @@
 
       <div class="fids-table" id="fidsTable" role="table" aria-label="全部车次">
         <div class="fids-table__head" role="row">
+          <span role="presentation" class="h-arrow"></span>
           <span role="presentation"></span>
-          <span role="presentation"></span>
-          <span role="columnheader">方向</span>
-          <span role="columnheader">开点</span>
-          <span role="columnheader">状态</span>
-          <span role="columnheader">位置</span>
+          <span role="columnheader" class="h-dir">方向</span>
+          <span role="columnheader" class="h-dep">开点</span>
+          <span role="columnheader" class="h-load">满载率</span>
+          <span role="columnheader" class="h-status">状态</span>
+          <span role="columnheader" class="h-loc">位置</span>
         </div>
         <div class="fids-table__body" id="fidsBody" role="rowgroup"></div>
       </div>
@@ -170,18 +181,13 @@
     </section>
   </main>
 
-  <footer class="site-footer">
-    <p>数据：工作日与周末时刻表 · 纯静态页面 · 浏览器本地实时推算（运行耗时当前按 1 小时估算，待更新）</p>
-    <p>彩虹班车全周可约 🌈 · 免费班次全天可约 · 一般班次开售即抢（开售 5 分钟内售罄）</p>
-  </footer>
-
   <noscript>
     <div style="text-align:center;padding:2rem">
       <p>请启用 JavaScript 以查看实时班车进度。</p>
     </div>
   </noscript>
 
-  <script src="app.js?v=20260904-2" type="module"></script></body>
+  <script src="app.js?v=20260904-10" type="module"></script></body>
 </html>
 
 

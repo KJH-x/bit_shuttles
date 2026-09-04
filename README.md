@@ -17,6 +17,16 @@
   - **发车后 T+10 分钟内仍显示**：T~T+5「已发车 · 可能还在上车点」，T+5~T+10「已发车」，T+10 后隐藏。
   - 筛选：全部 / 良乡→中关村 / 中关村→良乡 / **除彩虹巴士**。
 - **实时路线耗时（高德）**：两个静态链接按钮（良乡→中关村 / 中关村→良乡），区块上方一条灰色虚线分隔；**桌面端**（排除 iPad/Android pad）点击按钮才弹出一个二维码气泡提示用手机扫码打开导航（不再常显）。
+- **余票实时查询（`/api/availability`）**：Pages Function 带签名访问 BIT 班车预约源站（`hqapp1.bit.edu.cn`），返回每趟余票 `available/total/pct`：
+  - **3h 可见窗口**：`0 ≤ 发车-now ≤ 3h` 的付费班次显示具体余票数字，颜色按真实余量（≥15 绿 / 6–14 黄 / ≤5 红）；售罄（余票=0）显示「售罄」红色；
+  - **付费 >3h 开售前**：只显示百分比（无具体数字），颜色同样按真实余量；
+  - **免费**：始终显示余票量；**彩虹**：不显示任何余量；
+  - **主屏**：班次卡右侧两行余票块（占「方向行+倒计时行」高度）——第一行「余N」大数字（38px）、第二行数据龄「数据是x分钟前」，无边框；**逐车独立查询**（最近班次优先，stale-while-revalidate 立刻返缓存）；
+  - **PIDS**：固定整数**满载率**列（`100−余票率`，手机端该列在车次左侧，表头桌面+手机均 sticky 冻结）；**等待发车位置显示出发点**（良乡=东校区上车点、中关村=西门上车点）；上车窗口 T-10~T+6（良乡）/T-10~T+5（中关村）显示「开始上车」；
+  - **日期切换**：即将开行面板可切换今日 / 昨日（历史快照，R2）/ 明日（未来班次），今日顶部显示**客流对比**红/绿箭头（与同期工作日/周末历史平均比较）；
+  - **TTL 缓存**：按阶段差异化（开售瞬间 20s / 常规 3min / 预售 1h / 免费 2h/30min），**R2 为主缓存**（`avail/live/{date}.json` + 逐车 `avail/trip/` 跨设备共享，未过期不碰源站；过期立刻返旧值 + 后台刷新），`Cache-Control: max-age+s-maxage` + SWR；
+  - **容错**：源站连接重试 3 次后放弃，失败日志写入 R2（`avail/last-failed.json`），响应降级显示「—」；
+  - **历史记录**：R2 每日快照保留 7 天，超期折入累计统计（工作日/周末分组，天数加权）。
 - **可作为 App 安装（PWA）**：`manifest.webmanifest` 达标（standalone / 图标 / 主题色），浏览器「安装应用」即可添加到桌面。
 - **iOS Safari 安装引导**：iOS 非 PWA 模式打开时，完全加载 5 秒后弹出自定义引导（长按地址栏 → 分享 → 添加到主屏幕，默认作为网页 App 打开）；「知道了」后不再打扰（`localStorage`）。
 - **可切换二号屏 PIDS（`#/PIDS`）**：顶部「标准屏 / PIDS」一键切换（hash 路由，兼容直接输入 `/#/PIDS`）；全车次一行一趟、紧凑排列，绿色方向箭头 + 目的地圆点 + 方向/开点/状态/位置（等待发车/催促上车/已出发/已到达，文字四色区分；底色区分未发车/运行中/已到达）。
@@ -42,9 +52,13 @@
 | `app.js` | 实时推算渲染 |
 | `lib/schedule.js` | 纯逻辑（班次状态、购票、耗时插值、格式化、T+10 文案） |
 | `lib/time.js` | 网络时间同步 |
+| `lib/availability.js` | 余票数据层（拉取 `/api/availability`、日期切换、数字/百分比、配色） |
 | `lib/duration-profiles.js` | 高德耗时预测原始数据（邻近插值） |
+| `functions/` | Pages Functions：`api/availability.js` + `_shared/`（签名/重试/TTL/R2 历史） |
+| `wrangler.toml` | Pages 配置：R2 bucket 绑定 `AVAIL_BUCKET`、vars（窗口/阈值/西山开关） |
+| `.dev.vars` | 本地开发 secret（`SCHOOL_SECRET`，已 gitignore，生产用 Pages 环境变量） |
 | `assets/qr-*.png` | 高德导航静态二维码（桌面扫码） |
-| `tests/` | auto-test（`node --test tests/schedule.test.mjs`，22 项） |
+| `tests/` | auto-test（`node --test tests/*.test.mjs`，44 项） |
 | `docs/ARCHITECTURE.md` | 架构 / 设计原因 / 改动历史（面向 LLM） |
 | `_headers` | Cloudflare Pages 安全头 / 缓存 |
 | `meta.json` | 站点元数据（X-B4 约定） |
@@ -69,16 +83,19 @@ export const DURATION_BY_ROUTE = {
 ## 本地预览与测试
 
 ```powershell
-# 本地预览（ES module 需 HTTP）
+# 本地静态预览（ES module 需 HTTP）
 python -m http.server 8877 --bind 127.0.0.1   # 打开 http://127.0.0.1:8877/
 
+# 本地全栈预览（含 /api/availability + R2 本地模拟；.dev.vars 提供 SCHOOL_SECRET）
+wrangler pages dev . --port 8799              # 打开 http://127.0.0.1:8799/
+
 # auto-test
-node --test tests/schedule.test.mjs
+node --test tests/*.test.mjs
 ```
 
 ## 发版注意
 
-改代码后记得**同步 bump 版本号**（`index.html`、`app.js`、`schedule-data.js` 中的 `?v=20260902-N`），否则可能吃到 zone 层旧缓存。详见 `docs/ARCHITECTURE.md` §7。
+改代码后记得**同步 bump 版本号**（`index.html`、`app.js`、`schedule-data.js` 中的 `?v=20260904-N`、`sw.js` 的 `CACHE_NAME`），否则可能吃到 zone 层旧缓存。详见 `docs/ARCHITECTURE.md` §7。首次启用余票功能需：① Pages 项目绑定 R2 `campus-shuttle-avail`（`wrangler.toml` 已声明）；② 设置生产环境变量 `SCHOOL_SECRET`（Pages secret，勿明文）与 `SCHOOL_SCHEME_ORDER`（默认 `https,http`）。
 
 ## 部署
 

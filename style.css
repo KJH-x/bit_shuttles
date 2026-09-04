@@ -15,6 +15,7 @@
   --tag-text: #92400e;
   --success: #16a34a;
   --danger: #dc2626;
+  --warning: #d97706;
   --track-bg: #f5f5f4;
   --track-fill: #f59e0b;
   --track-bound: #d6d3d1;
@@ -48,6 +49,7 @@ html[data-theme="dark"] {
   --tag-text: #fde68a;
   --success: #22c55e;
   --danger: #f87171;
+  --warning: #fbbf24;
   --track-bg: #3f3a36;
   --track-fill: #fbbf24;
   --track-bound: #78716c;
@@ -291,6 +293,88 @@ a:hover {
 .toolbar__status strong {
   color: var(--text);
   font-weight: 700;
+}
+
+/* ===== 今日客流对比徽标（红/绿 上下箭头） ===== */
+.traffic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: .8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.traffic-badge--red {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.traffic-badge--green {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+}
+
+/* ===== 即将开行控制条（日期导航 + 余票显示模式） ===== */
+.panel__head--upcoming {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.upcoming-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.date-nav {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.date-nav__btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s ease, color .15s ease;
+}
+.date-nav__btn:hover {
+  background: var(--accent-light);
+  color: var(--text);
+}
+.date-nav__btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+.date-nav__label {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--text);
+  padding: 6px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.date-nav__label:hover {
+  color: var(--primary);
+}
+
+.avail-toggle {
+  font-size: .78rem;
+  padding: 6px 14px;
 }
 
 .theme-label {
@@ -885,16 +969,24 @@ section[aria-labelledby="runningTitle"] .panel__head {
 .fids-table {
   border: 1px solid var(--border);
   border-radius: 14px;
-  overflow: hidden;
+  overflow: clip; /* clip 保留圆角裁剪，但不生成滚动容器，sticky 表头才能随页面滚动冻结 */
   font-size: .88rem;
 }
 
 .fids-table__head,
 .fids-row {
   display: grid;
-  grid-template-columns: 24px 24px 1fr 72px 120px 1fr;
+  grid-template-columns: 24px 24px 1fr 72px 64px 120px 1fr;
   align-items: center;
   gap: 8px;
+}
+
+.fids-table__head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface-2);
+  font-size: .9rem; /* 表头字略大 */
 }
 
 .fids-row__arrow {
@@ -989,6 +1081,25 @@ section[aria-labelledby="runningTitle"] .panel__head {
 .fids-row__dep {
   color: var(--text);
   font-weight: 700;
+}
+
+.fids-row__pct {
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.fids-row__pct.avail--green {
+  color: var(--success);
+}
+.fids-row__pct.avail--yellow {
+  color: var(--warning);
+}
+.fids-row__pct.avail--red {
+  color: var(--danger);
+  font-weight: 800;
 }
 
 .fids-row__loc {
@@ -1147,9 +1258,15 @@ section[aria-labelledby="runningTitle"] .panel__head {
 }
 
 .trip-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "row1 row1"
+    "route avail"
+    "cd   avail";
+  column-gap: 16px;
+  row-gap: 6px;
+  align-items: center;
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -1163,6 +1280,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
 }
 
 .trip-item__row1 {
+  grid-area: row1;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1178,6 +1296,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
 }
 
 .trip-item__route {
+  grid-area: route;
   font-weight: 600;
   color: var(--text);
 }
@@ -1187,6 +1306,18 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.trip-item__countdown {
+  grid-area: cd;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.trip-item__countdown--soon {
+  color: var(--primary);
 }
 
 /* ===== Ticket badge ===== */
@@ -1199,6 +1330,54 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-weight: 700;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+/* ===== 余票显示（主屏班次卡）：右侧两行块，跨「方向行+倒计时行」高度，无边框 ===== */
+.trip-item__avail {
+  grid-area: avail;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.trip-item__avail-l {
+  font-size: .95rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.trip-item__avail-n {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.trip-item__avail-ttl {
+  font-size: .72rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--muted);
+  opacity: .75;
+  white-space: nowrap;
+}
+
+.trip-item__avail.avail--green .trip-item__avail-l,
+.trip-item__avail.avail--green .trip-item__avail-n {
+  color: var(--success);
+}
+.trip-item__avail.avail--yellow .trip-item__avail-l,
+.trip-item__avail.avail--yellow .trip-item__avail-n {
+  color: var(--warning);
+}
+.trip-item__avail.avail--red .trip-item__avail-l,
+.trip-item__avail.avail--red .trip-item__avail-n {
+  color: var(--danger);
 }
 
 .ticket--free {
@@ -1259,17 +1438,6 @@ section[aria-labelledby="runningTitle"] .panel__head {
   background: var(--surface-2);
   color: var(--muted);
   border: 1px solid var(--border);
-}
-
-.trip-item__countdown {
-  font-size: .8rem;
-  font-weight: 600;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.trip-item__countdown--soon {
-  color: var(--primary);
 }
 
 /* ===== Empty state ===== */
@@ -1357,21 +1525,56 @@ section[aria-labelledby="runningTitle"] .panel__head {
     border-radius: 0;
   }
 
-  /* PIDS 窄屏紧凑：左列=箭头（占两行），右列=时间在上/方向在下；状态+位置第三行两列 */
+  /* PIDS 窄屏紧凑：表头重新显示（sticky 冻结，字略大），与行共用相同 4 列 grid 区域 */
   .fids-table__head {
+    display: grid;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--surface-2);
+    font-size: .9rem;
+    grid-template-columns: 22px 52px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "arrow pct dep status"
+      "arrow pct dir loc";
+    gap: 2px 8px;
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fids-table__head [role="presentation"] {
     display: none;
   }
+  .fids-table__head .h-dir {
+    grid-area: dir;
+  }
+  .fids-table__head .h-dep {
+    grid-area: dep;
+  }
+  .fids-table__head .h-load {
+    grid-area: pct;
+  }
+  .fids-table__head .h-status {
+    grid-area: status;
+  }
+  .fids-table__head .h-loc {
+    grid-area: loc;
+  }
   .fids-row {
-    grid-template-columns: 22px minmax(0, 1fr) auto;
+    grid-template-columns: 22px 52px minmax(0, 1fr) auto;
     grid-template-areas:
-      "arrow dep status"
-      "arrow dir loc";
+      "arrow pct dep status"
+      "arrow pct dir loc";
   }
   .fids-row__arrow--l,
   .fids-row__arrow--r {
     grid-area: arrow;
     text-align: center;
     justify-self: start;
+  }
+  .fids-row__pct {
+    grid-area: pct;
+    justify-self: start;
+    font-size: .78rem;
   }
   .fids-row__dir {
     grid-area: dir;
