@@ -120,6 +120,11 @@ html[data-theme="system"] {
   padding: 0;
 }
 
+/* hidden 属性必须强制隐藏（否则 inline-flex 等作者样式会覆盖 UA 默认 display:none） */
+[hidden] {
+  display: none !important;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
