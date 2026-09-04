@@ -17,9 +17,9 @@
   - **发车后 T+10 分钟内仍显示**：T~T+5「已发车 · 可能还在上车点」，T+5~T+10「已发车」，T+10 后隐藏。
   - 筛选：全部 / 良乡→中关村 / 中关村→良乡 / **除彩虹巴士**。
 - **实时路线耗时（高德）**：两个静态链接按钮（良乡→中关村 / 中关村→良乡），区块上方一条灰色虚线分隔；**桌面端**（排除 iPad/Android pad）点击按钮才弹出一个二维码气泡提示用手机扫码打开导航（不再常显）。
-- **高德实时路况（`/api/traffic`）**：Pages Function 免鉴权拉取 `m.amap.com` driving.json（iPhone UA + Referer，无登录/无 key/无 cookie），返回两条直连线路（良乡⇄中关村 36.5/36.8km）的**实时预计耗时 + 三分段路况色带**：
-  - **读模式**：`GET /api/traffic` → R2 缓存直出 `{ available, fetchedAt, dirs:{ fwd, rev } }`，前端每 60s 轮询；
-  - **刷新模式**：`GET /api/traffic?refresh=1&token=...` 由 **GitHub Actions cron**（`.github/workflows/traffic-refresh.yml`，每 10 分钟 + 手动 dispatch）触发，服务端 timing-safe 鉴权 `TRAFFIC_REFRESH_TOKEN` + **5 分钟限频闸**，单方向失败保留旧值；Pages 不支持 Cron Triggers，故用 Actions 作 cron 载体；
+- **高德实时路况（`/api/traffic`）**：本地计划任务脚本（`workspace/campus-shuttle-amap-refresh-20260905/amap-refresh.mjs`，Windows 任务计划每 10 分钟）免鉴权拉取 `m.amap.com` driving.json（iPhone UA + Referer，无登录/无 key/无 cookie），SigV4 直写生产 R2 `traffic/live.json`；返回两条直连线路（良乡⇄中关村 36.5/36.8km）的**实时预计耗时 + 三分段路况色带**：
+  - **读模式**：`GET /api/traffic`（纯读 Pages Function）→ R2 缓存直出 `{ available, fetchedAt, dirs:{ fwd, rev } }`，前端每 60s 轮询；**无需任何 Pages 环境变量/secret**（本地脚本用自己的 `BITBUS_R2_*` 凭据直写 R2）；
+  - **本地刷新脚本**：Pages 不支持 Cron Triggers，故用**本地计划任务**（而非 GitHub Actions）定时拉取并直写 R2；单方向失败保留旧值，双失败不上传（前端回退静态表）；`--dry` 仅拉取不上传；
   - **实时 ETA 仅在数据被拉取后生效**（数据龄 ≤30min，过期自动回退静态耗时表），生效时**所有需运行时间的计算**（运行图 marker 按段位移、预计到达、剩余、PIDS 进度、检查点）自动使用实时值；运行图 `lane--a/c` 叠加半透明路况色带（fwd 正向 S1→S2→S3、rev 反向），高德区显示「路况更新于 HH:MM · N 分钟前」；
   - **只取直连线路**（容差 ±0.3km，无匹配取最小耗时）；**严格丢弃** cost/红绿灯数/路径详情（不输出不存储）；**耗时不再 1 小时封顶**（实时与静态均不截断）。
 - **余票实时查询（`/api/availability`）**：Pages Function 带签名访问 BIT 班车预约源站（`hqapp1.bit.edu.cn`），返回每趟余票 `available/total/pct`：
@@ -100,7 +100,7 @@ node --test tests/*.test.mjs
 
 ## 发版注意
 
-改代码后记得**同步 bump 版本号**（`index.html`、`app.js`、`schedule-data.js` 中的 `?v=20260904-N`、`sw.js` 的 `CACHE_NAME`），否则可能吃到 zone 层旧缓存。详见 `docs/ARCHITECTURE.md` §7。首次启用余票功能需：① Pages 项目绑定 R2 `campus-shuttle-avail`（`wrangler.toml` 已声明）；② 设置生产环境变量 `SCHOOL_SECRET`（Pages secret，勿明文）与 `SCHOOL_SCHEME_ORDER`（默认 `https,http`）。实时路况（v1.17）另需：③ Pages 生产环境变量 `TRAFFIC_REFRESH_TOKEN`（与 GitHub repo secret 同名同值）；④ GitHub 仓库 Settings → Secrets 添加 `TRAFFIC_REFRESH_TOKEN`（供 `.github/workflows/traffic-refresh.yml` 每 10 分钟触发 refresh 端点）。
+改代码后记得**同步 bump 版本号**（`index.html`、`app.js`、`schedule-data.js` 中的 `?v=20260904-N`、`sw.js` 的 `CACHE_NAME`），否则可能吃到 zone 层旧缓存。详见 `docs/ARCHITECTURE.md` §7。首次启用余票功能需：① Pages 项目绑定 R2 `campus-shuttle-avail`（`wrangler.toml` 已声明）；② 设置生产环境变量 `SCHOOL_SECRET`（Pages secret，勿明文）与 `SCHOOL_SCHEME_ORDER`（默认 `https,http`）。实时路况（v1.17）**无需任何 Pages 环境变量**：本地计划任务脚本用 Windows 用户级 `BITBUS_R2_ACCESS_KEY_ID` / `BITBUS_R2_SECRET_ACCESS_KEY` / `BITBUS_R2_ENDPOINT` / `BITBUS_R2_BUCKET`（专有 key，`R2_*` 为其他项目，勿动）直写 R2 `traffic/live.json`；脚本位于 `workspace/campus-shuttle-amap-refresh-20260905/`，由计划任务「bitbus-amap-refresh」每 10 分钟经 `run-hidden.vbs`（wscript，隐藏窗口、不抢焦点、RegRead 注入凭据）运行，日志追加到 `.opencode/runtime/logs/amap_refresh.log`。
 
 ## 部署
 
