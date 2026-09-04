@@ -1,4 +1,4 @@
-const CACHE_NAME = "bitbus-static-v20260904-4";
+const CACHE_NAME = "bitbus-static-v20260904-2";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -14,7 +14,6 @@ const CORE_ASSETS = [
   "/assets/qr-reverse.png",
   "/lib/schedule.js",
   "/lib/time.js",
-  "/lib/availability.js",
   "/lib/duration-profiles.js",
   "/lib/install-guide.js",
   "/lib/qq-guide.js"
