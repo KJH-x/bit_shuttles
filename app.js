@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-6";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-8";
 import {
   formatClock,
   formatHM,
@@ -13,16 +13,17 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-6";
-import { now, syncClock } from "./lib/time.js?v=20260904-6";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-6";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-6";
+} from "./lib/schedule.js?v=20260904-8";
+import { now, syncClock } from "./lib/time.js?v=20260904-8";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-8";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-8";
 import {
   initAvail,
   setDate as setAvailDate,
   mainAvailText,
-  pidsAvailText
-} from "./lib/availability.js?v=20260904-6";
+  pidsAvailText,
+  availAgeMs
+} from "./lib/availability.js?v=20260904-8";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -547,16 +548,15 @@ function updateTripAvail(li, trip) {
   const key = `${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
   const view = mainAvailText({ ...trip, avail: a });
-  if (!view || (view.count == null && view.pct == null)) {
+  if (!view) {
     avEl.textContent = "";
     avEl.className = "trip-item__avail";
     return;
   }
   avEl.className = `trip-item__avail avail--${view.color}`;
-  let html = "";
-  if (view.count != null) html += `<span class="trip-item__avail-n">余${view.count}</span>`;
-  if (view.pct != null) html += `<span class="trip-item__avail-p">${view.pct}%</span>`;
-  avEl.innerHTML = html;
+  const ageMs = availAgeMs();
+  const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
+  avEl.innerHTML = `<span class="trip-item__avail-l">余</span><span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
 }
 
 function renderList(ul, list, now, highlightNext) {

@@ -969,7 +969,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
 .fids-table {
   border: 1px solid var(--border);
   border-radius: 14px;
-  overflow: hidden;
+  overflow: clip; /* clip 保留圆角裁剪，但不生成滚动容器，sticky 表头才能随页面滚动冻结 */
   font-size: .88rem;
 }
 
@@ -979,6 +979,14 @@ section[aria-labelledby="runningTitle"] .panel__head {
   grid-template-columns: 24px 24px 1fr 72px 64px 120px 1fr;
   align-items: center;
   gap: 8px;
+}
+
+.fids-table__head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface-2);
+  font-size: .9rem; /* 表头字略大 */
 }
 
 .fids-row__arrow {
@@ -1336,6 +1344,13 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-variant-numeric: tabular-nums;
 }
 
+.trip-item__avail-l {
+  font-size: .95rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+}
+
 .trip-item__avail-n {
   font-size: 2.4rem;
   font-weight: 800;
@@ -1343,24 +1358,25 @@ section[aria-labelledby="runningTitle"] .panel__head {
   color: var(--muted);
 }
 
-.trip-item__avail-p {
-  font-size: 1.1rem;
-  font-weight: 700;
-  line-height: 1.1;
+.trip-item__avail-ttl {
+  font-size: .72rem;
+  font-weight: 500;
+  line-height: 1;
   color: var(--muted);
-  opacity: .85;
+  opacity: .75;
+  white-space: nowrap;
 }
 
-.trip-item__avail.avail--green .trip-item__avail-n,
-.trip-item__avail.avail--green .trip-item__avail-p {
+.trip-item__avail.avail--green .trip-item__avail-l,
+.trip-item__avail.avail--green .trip-item__avail-n {
   color: var(--success);
 }
-.trip-item__avail.avail--yellow .trip-item__avail-n,
-.trip-item__avail.avail--yellow .trip-item__avail-p {
+.trip-item__avail.avail--yellow .trip-item__avail-l,
+.trip-item__avail.avail--yellow .trip-item__avail-n {
   color: var(--warning);
 }
-.trip-item__avail.avail--red .trip-item__avail-n,
-.trip-item__avail.avail--red .trip-item__avail-p {
+.trip-item__avail.avail--red .trip-item__avail-l,
+.trip-item__avail.avail--red .trip-item__avail-n {
   color: var(--danger);
 }
 
@@ -1509,9 +1525,39 @@ section[aria-labelledby="runningTitle"] .panel__head {
     border-radius: 0;
   }
 
-  /* PIDS 窄屏紧凑：左列=箭头（占两行），余量列紧跟其右；时间/方向/状态/位置 */
+  /* PIDS 窄屏紧凑：表头重新显示（sticky 冻结，字略大），与行共用相同 4 列 grid 区域 */
   .fids-table__head {
+    display: grid;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--surface-2);
+    font-size: .9rem;
+    grid-template-columns: 22px 52px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "arrow pct dep status"
+      "arrow pct dir loc";
+    gap: 2px 8px;
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fids-table__head [role="presentation"] {
     display: none;
+  }
+  .fids-table__head .h-dir {
+    grid-area: dir;
+  }
+  .fids-table__head .h-dep {
+    grid-area: dep;
+  }
+  .fids-table__head .h-load {
+    grid-area: pct;
+  }
+  .fids-table__head .h-status {
+    grid-area: status;
+  }
+  .fids-table__head .h-loc {
+    grid-area: loc;
   }
   .fids-row {
     grid-template-columns: 22px 52px minmax(0, 1fr) auto;
