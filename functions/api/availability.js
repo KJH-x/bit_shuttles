@@ -18,6 +18,8 @@ import {
 import {
   writeSnapshot,
   readSnapshot,
+  readLiveCache,
+  writeLiveCache,
   rollupExpiredSnapshots,
   trafficForToday,
   writeLastFailed
@@ -27,6 +29,7 @@ import { shiftDate } from "../_shared/metrics.js";
 const MAX_ATTEMPTS = 3;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_TS_SKEW_MS = 30 * 60000;
+const LIVE_DEFAULT_TTL = 60; // R2 live 缓存默认 TTL（秒）
 
 function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -37,6 +40,10 @@ function json(data, status = 200, extraHeaders = {}) {
 
 function makeSchoolUrls(path, schemeOrder) {
   return host(schemeOrder).map((h) => h + path);
+}
+
+function cacheHeaders(ttl) {
+  return { "Cache-Control": `public, max-age=${ttl}, s-maxage=${ttl}, stale-while-revalidate=${ttl * 2}` };
 }
 
 export async function onRequest({ request, env, waitUntil }) {
@@ -59,7 +66,31 @@ export async function onRequest({ request, env, waitUntil }) {
   // 源站协议顺序：默认 https 优先、失败回退 http；本地/内网可覆盖为 http
   const schemeOrder = env.SCHOOL_SCHEME_ORDER || "https,http";
   const cache = caches.default;
-  const cacheKey = `https://bitbus.nslc.top/api/availability?date=${date}&x=${enableXishan}`;
+  const cacheKey = request.url;
+
+  // === 主缓存：R2 live 缓存（跨设备共享）===
+  // 命中：now - fetchedAt < minTtl（读 R2 不碰源站，第二台设备秒开）
+  const live = await readLiveCache(bucket, date);
+  if (live && Array.isArray(live.trips)) {
+    const ttl = live.minTtl != null && live.minTtl > 0 ? live.minTtl : LIVE_DEFAULT_TTL;
+    const fresh = live.fetchedAt != null && Date.now() - live.fetchedAt < ttl * 1000;
+    if (fresh) {
+      return json(
+        {
+          serverNow: Date.now(),
+          date,
+          minTtl: ttl,
+          source: "r2-cache",
+          traffic: live.traffic || null,
+          trips: live.trips
+        },
+        200,
+        cacheHeaders(ttl)
+      );
+    }
+  }
+
+  // CF Cache API 次级缓存（跨边缘，快速兜底）
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
@@ -81,7 +112,7 @@ export async function onRequest({ request, env, waitUntil }) {
         trips: snap ? snap.trips : []
       },
       200,
-      { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=7200" }
+      cacheHeaders(3600)
     );
     waitUntil(cache.put(cacheKey, res.clone()));
     return res;
@@ -95,8 +126,11 @@ export async function onRequest({ request, env, waitUntil }) {
     );
     const rows = Array.isArray(list.data) ? list.data : [];
 
-    // total 反推：当天未停售的非彩虹班次（Q3：>3h 付费班次也需百分比；成本受控并发）
-    const needTotal = rows
+    // 逐趟查询 get-reserved-seats 获取真实余票：
+    //   available = reservation_num（剩余可约座位）
+    //   total     = reserved_count + reservation_num（总坐席）
+    //   get-list 的 reservation_num_able 是总坐席（51/55），不是余票，不能当 available。
+    const needSeats = rows
       .filter((r) => NAME_TO_ROUTE[r.name])
       .filter((r) => String(r.type) !== "1")
       .filter((r) => !enableXishan || !["d", "e"].includes(NAME_TO_ROUTE[r.name]))
@@ -105,13 +139,12 @@ export async function onRequest({ request, env, waitUntil }) {
         if (!dep) return false;
         const tMs = depToMs(dep, date);
         return nowMs < tMs - 5 * 60000; // 停售后不再反推
-      })
-      .slice(0, 20);
+      });
 
-    const totals = new Map();
+    const seatInfo = new Map(); // name|dep -> { available, total }
     const CHUNK = 4;
-    for (let i = 0; i < needTotal.length; i += CHUNK) {
-      const chunk = needTotal.slice(i, i + CHUNK);
+    for (let i = 0; i < needSeats.length; i += CHUNK) {
+      const chunk = needSeats.slice(i, i + CHUNK);
       await Promise.all(
         chunk.map(async (r) => {
           try {
@@ -121,11 +154,11 @@ export async function onRequest({ request, env, waitUntil }) {
             );
             const seatData = seat && seat.data ? seat.data : seat;
             const reserved = Number(seatData.reserved_count ?? 0);
-            const reservationNum = Number(seatData.reservation_num ?? 0);
-            const total = reserved + reservationNum;
-            totals.set(r.name + "|" + r.origin_time, total > 0 ? total : null);
+            const avail = Number(seatData.reservation_num ?? 0);
+            const total = reserved + avail;
+            if (total > 0) seatInfo.set(r.name + "|" + r.origin_time, { available: avail, total });
           } catch {
-            totals.set(r.name + "|" + r.origin_time, null);
+            seatInfo.set(r.name + "|" + r.origin_time, null);
           }
         })
       );
@@ -144,24 +177,15 @@ export async function onRequest({ request, env, waitUntil }) {
         const paid = Number(r.teacher_ticket_price ?? 0) > 0;
         const visible = isVisible(nowMs, tMs);
         const { phase, ttl } = paid ? paidPhaseTtl(nowMs, tMs) : { phase: "free", ttl: freeTtl(nowMs, tMs, isToday) };
-        const availableRaw = Number(r.reservation_num_able);
-        const total = totals.get(r.name + "|" + r.origin_time);
-        const available = paid && !visible ? null : Number.isFinite(availableRaw) ? availableRaw : null;
-        const pct = Number.isFinite(availableRaw) && total != null && total > 0 ? Math.round((availableRaw / total) * 100) : null;
+        const si = seatInfo.get(r.name + "|" + r.origin_time);
+        const availableRaw = si ? si.available : null;
+        const total = si ? si.total : null;
+        // 付费窗口外（>3h）：不返回具体数字，但保留 pct（开售前百分比，颜色按真实余量）
+        const available = paid && !visible ? null : availableRaw;
+        const pct = availableRaw != null && total != null && total > 0 ? Math.round((availableRaw / total) * 100) : null;
         return { route, dep, name: r.name, paid, rainbow, phase, ttl, visible, available, total, pct };
       })
       .filter(Boolean);
-
-    // 写当日快照 + 折入过期快照（后台执行，不阻塞响应）
-    if (isToday) {
-      const snapTrips = trips.map((t) => ({ route: t.route, dep: t.dep, available: t.available, total: t.total }));
-      waitUntil(
-        (async () => {
-          await writeSnapshot(bucket, date, snapTrips);
-          await rollupExpiredSnapshots(bucket, todayStr);
-        })().catch(() => {})
-      );
-    }
 
     const ttlList = trips.map((t) => (t.ttl == null ? null : t.ttl));
     const mTtl = minTtl(ttlList) || 60;
@@ -172,10 +196,22 @@ export async function onRequest({ request, env, waitUntil }) {
       traffic = await trafficForToday(bucket, todayStr, trips);
     }
 
+    // 写 R2 live 缓存（主缓存，跨设备共享）+ 当日快照 + 折入过期快照
+    waitUntil(
+      (async () => {
+        await writeLiveCache(bucket, date, { minTtl: mTtl, traffic, trips });
+        if (isToday) {
+          const snapTrips = trips.map((t) => ({ route: t.route, dep: t.dep, available: t.available, total: t.total }));
+          await writeSnapshot(bucket, date, snapTrips);
+          await rollupExpiredSnapshots(bucket, todayStr);
+        }
+      })().catch(() => {})
+    );
+
     const res = json(
       { serverNow: nowMs, date, minTtl: mTtl, source: "live", traffic, trips },
       200,
-      { "Cache-Control": `public, s-maxage=${mTtl}, stale-while-revalidate=${mTtl * 2}` }
+      cacheHeaders(mTtl)
     );
     waitUntil(cache.put(cacheKey, res.clone(), { expirationTtl: mTtl * 2 }));
     return res;
@@ -184,10 +220,12 @@ export async function onRequest({ request, env, waitUntil }) {
     waitUntil(
       writeLastFailed(bucket, { date, error: String((err && err.message) || err), attempts: MAX_ATTEMPTS }).catch(() => {})
     );
+    // degraded 也写短 TTL 的 R2 live 缓存，避免每台设备都重试源站
+    waitUntil(writeLiveCache(bucket, date, { minTtl: 60, traffic: null, trips: [] }).catch(() => {}));
     return json(
       { serverNow: Date.now(), date, minTtl: 60, source: "degraded", traffic: null, trips: [] },
       200,
-      { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" }
+      cacheHeaders(60)
     );
   }
 }

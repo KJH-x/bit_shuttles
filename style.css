@@ -1304,35 +1304,23 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-variant-numeric: tabular-nums;
 }
 
-/* ===== 余票显示（主屏班次卡） ===== */
+/* ===== 余票显示（主屏班次卡）：右侧大数字，无边框 ===== */
 .trip-item__avail {
-  display: inline-flex;
-  align-items: center;
-  min-height: 20px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: .72rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  background: var(--surface-2);
+  margin-left: auto;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
   color: var(--muted);
-  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
 }
 .trip-item__avail.avail--green {
   color: var(--success);
-  border-color: color-mix(in srgb, var(--success) 40%, transparent);
-  background: color-mix(in srgb, var(--success) 10%, transparent);
 }
 .trip-item__avail.avail--yellow {
   color: var(--warning);
-  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
-  background: color-mix(in srgb, var(--warning) 10%, transparent);
 }
 .trip-item__avail.avail--red {
   color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  font-weight: 800;
 }
 
 .ticket--free {

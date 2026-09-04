@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-4";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-5";
 import {
   formatClock,
   formatHM,
@@ -13,18 +13,16 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-4";
-import { now, syncClock } from "./lib/time.js?v=20260904-4";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-4";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-4";
+} from "./lib/schedule.js?v=20260904-5";
+import { now, syncClock } from "./lib/time.js?v=20260904-5";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-5";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-5";
 import {
   initAvail,
   setDate as setAvailDate,
-  setMode as setAvailMode,
-  getMode as getAvailMode,
   mainAvailText,
   pidsAvailText
-} from "./lib/availability.js?v=20260904-4";
+} from "./lib/availability.js?v=20260904-5";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -48,7 +46,6 @@ const dom = {
   datePrev: document.getElementById("datePrev"),
   dateNext: document.getElementById("dateNext"),
   dateLabel: document.getElementById("dateLabel"),
-  availToggle: document.getElementById("availToggle"),
   routeChips: document.getElementById("routeChips"),
   trackMain: document.getElementById("trackMain"),
   corridorContainer: document.getElementById("corridors"),
@@ -80,7 +77,6 @@ const state = {
   fidsSig: "",
   fidsAutoScroll: false,
   viewDate: null, // null=跟随真实今天；否则 'YYYY-MM-DD'
-  availMode: getAvailMode(),
   availMap: new Map(), // `${route}|${dep}` → avail
   traffic: null
 };
@@ -147,21 +143,6 @@ function bindDateNav() {
     renderDateNav();
     tick();
   });
-}
-
-function bindAvailToggle() {
-  const refresh = () => {
-    dom.availToggle.textContent = state.availMode === "pct" ? "余票：百分比" : "余票：数字";
-    dom.availToggle.setAttribute("aria-pressed", String(state.availMode === "pct"));
-  };
-  dom.availToggle.addEventListener("click", () => {
-    state.availMode = setAvailMode(state.availMode === "pct" ? "num" : "pct");
-    state.upcomingSig = "";
-    state.fidsSig = "";
-    refresh();
-    tick();
-  });
-  refresh();
 }
 
 function initAvailBridge() {
@@ -565,7 +546,7 @@ function updateTripAvail(li, trip) {
   if (!avEl) return;
   const key = `${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
-  const view = mainAvailText({ ...trip, avail: a }, state.availMode);
+  const view = mainAvailText({ ...trip, avail: a });
   if (!view) {
     avEl.textContent = "";
     avEl.className = "trip-item__avail";
@@ -791,7 +772,6 @@ bindChips();
 bindDetailToggle();
 bindAmapQr();
 bindDateNav();
-bindAvailToggle();
 initAvailBridge();
 document.addEventListener("click", () => {
   document.querySelectorAll(".bus-marker--active").forEach((m) => m.classList.remove("bus-marker--active"));

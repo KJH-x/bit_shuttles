@@ -16,6 +16,7 @@ import {
 } from "./metrics.js";
 
 export const SNAPSHOT_PREFIX = "avail/";
+export const LIVE_PREFIX = "avail/live/";
 export const CUMULATIVE_KEY = "avail/cumulative.json";
 export const LAST_FAILED_KEY = "avail/last-failed.json";
 const SNAPSHOT_KEEP_DAYS = 7;
@@ -42,6 +43,16 @@ export async function writeSnapshot(bucket, date, trips) {
 
 export async function readSnapshot(bucket, date) {
   return readJson(bucket, `${SNAPSHOT_PREFIX}${date}.json`);
+}
+
+// R2 live 缓存（跨设备共享）：存最近一次成功拉取的余票数据 + 抓取时间
+// 命中条件：now - fetchedAt < minTtl*1000（由写入方根据最小 TTL 计算）
+export async function writeLiveCache(bucket, date, payload) {
+  await writeJson(bucket, `${LIVE_PREFIX}${date}.json`, { ...payload, fetchedAt: Date.now() });
+}
+
+export async function readLiveCache(bucket, date) {
+  return readJson(bucket, `${LIVE_PREFIX}${date}.json`);
 }
 
 export async function readCumulative(bucket) {
