@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-5";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-6";
 import {
   formatClock,
   formatHM,
@@ -13,16 +13,16 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-5";
-import { now, syncClock } from "./lib/time.js?v=20260904-5";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-5";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-5";
+} from "./lib/schedule.js?v=20260904-6";
+import { now, syncClock } from "./lib/time.js?v=20260904-6";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-6";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-6";
 import {
   initAvail,
   setDate as setAvailDate,
   mainAvailText,
   pidsAvailText
-} from "./lib/availability.js?v=20260904-5";
+} from "./lib/availability.js?v=20260904-6";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -530,13 +530,13 @@ function tripItemHtml(trip, now, isNext) {
         <span class="trip-item__time">${escapeHtml(trip.dep)}</span>
         ${priceTagHtml(trip.price)}
         <span class="trip-item__ticket ${ticketClass(info)}" data-role="ticket">${escapeHtml(info.label)}</span>
-        <span class="trip-item__avail" data-role="avail"></span>
       </span>
       <span class="trip-item__route">
         ${escapeHtml(ROUTE_LABEL[trip.route])}
         ${rainbowTag}
       </span>
       <span class="trip-item__countdown${soon ? " trip-item__countdown--soon" : ""}" data-role="countdown">—</span>
+      <span class="trip-item__avail" data-role="avail"></span>
     </li>
   `;
 }
@@ -547,13 +547,16 @@ function updateTripAvail(li, trip) {
   const key = `${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
   const view = mainAvailText({ ...trip, avail: a });
-  if (!view) {
+  if (!view || (view.count == null && view.pct == null)) {
     avEl.textContent = "";
     avEl.className = "trip-item__avail";
     return;
   }
-  avEl.textContent = view.text;
   avEl.className = `trip-item__avail avail--${view.color}`;
+  let html = "";
+  if (view.count != null) html += `<span class="trip-item__avail-n">余${view.count}</span>`;
+  if (view.pct != null) html += `<span class="trip-item__avail-p">${view.pct}%</span>`;
+  avEl.innerHTML = html;
 }
 
 function renderList(ul, list, now, highlightNext) {

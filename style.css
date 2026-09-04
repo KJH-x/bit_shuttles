@@ -1250,9 +1250,15 @@ section[aria-labelledby="runningTitle"] .panel__head {
 }
 
 .trip-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "row1 row1"
+    "route avail"
+    "cd   avail";
+  column-gap: 16px;
+  row-gap: 6px;
+  align-items: center;
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -1266,6 +1272,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
 }
 
 .trip-item__row1 {
+  grid-area: row1;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1281,6 +1288,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
 }
 
 .trip-item__route {
+  grid-area: route;
   font-weight: 600;
   color: var(--text);
 }
@@ -1290,6 +1298,18 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.trip-item__countdown {
+  grid-area: cd;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.trip-item__countdown--soon {
+  color: var(--primary);
 }
 
 /* ===== Ticket badge ===== */
@@ -1304,22 +1324,43 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-variant-numeric: tabular-nums;
 }
 
-/* ===== 余票显示（主屏班次卡）：右侧大数字，无边框 ===== */
+/* ===== 余票显示（主屏班次卡）：右侧两行块，跨「方向行+倒计时行」高度，无边框 ===== */
 .trip-item__avail {
-  margin-left: auto;
-  font-size: 1.15rem;
+  grid-area: avail;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.trip-item__avail-n {
+  font-size: 2.4rem;
   font-weight: 800;
   line-height: 1;
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
-.trip-item__avail.avail--green {
+
+.trip-item__avail-p {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--muted);
+  opacity: .85;
+}
+
+.trip-item__avail.avail--green .trip-item__avail-n,
+.trip-item__avail.avail--green .trip-item__avail-p {
   color: var(--success);
 }
-.trip-item__avail.avail--yellow {
+.trip-item__avail.avail--yellow .trip-item__avail-n,
+.trip-item__avail.avail--yellow .trip-item__avail-p {
   color: var(--warning);
 }
-.trip-item__avail.avail--red {
+.trip-item__avail.avail--red .trip-item__avail-n,
+.trip-item__avail.avail--red .trip-item__avail-p {
   color: var(--danger);
 }
 
@@ -1381,17 +1422,6 @@ section[aria-labelledby="runningTitle"] .panel__head {
   background: var(--surface-2);
   color: var(--muted);
   border: 1px solid var(--border);
-}
-
-.trip-item__countdown {
-  font-size: .8rem;
-  font-weight: 600;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.trip-item__countdown--soon {
-  color: var(--primary);
 }
 
 /* ===== Empty state ===== */
