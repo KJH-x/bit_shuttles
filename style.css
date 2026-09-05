@@ -1708,4 +1708,9 @@ section[aria-labelledby="runningTitle"] .panel__head {
   }
 
   /* 主视图运行图窄屏：无检查点文字（改为 lane 内圆点） */
+
+  /* 运行详情检查点窄屏：省略「收费站」后缀（与顶部进度条一致） */
+  .running-item__cp-suffix {
+    display: none;
+  }
 }

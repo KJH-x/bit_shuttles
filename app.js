@@ -489,11 +489,15 @@ function runningItemHtml(trip, now) {
   const elapsed = now - trip.depMs;
   const remaining = trip.arrMs - now;
   const pct = Math.round(trip.progress * 100);
-  const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
+const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
+  const cpMeta = CHECKPOINTS[trip.route] || [];
   const cpLine = cps.length
     ? `<div class="running-item__cp" data-role="checkpoints">${cps.map((cp, i) => {
         const passed = now >= cp.ms;
-        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${escapeHtml(cp.label)}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? '<span class="running-item__cp-arrow">→</span>' : ""}`;
+        const meta = cpMeta[i] || {};
+        const name = meta.name ? escapeHtml(meta.name) : escapeHtml(cp.label);
+        const suffix = meta.note ? `<span class="running-item__cp-suffix">${escapeHtml(meta.note)}</span>` : "";
+        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${name}${suffix}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? '<span class="running-item__cp-arrow">→</span>' : ""}`;
       }).join("")}</div>`
     : "";
 return `
