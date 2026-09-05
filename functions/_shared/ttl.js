@@ -54,6 +54,20 @@ export function isVisible(nowMs, tMs) {
   return diff >= 0 && diff <= VISIBLE_WINDOW_MIN * MIN;
 }
 
+// 响应前按「当前时刻」重算可见性与 available：
+// 缓存里的 available 是快照时刻算的（落入过 paid && !visible → null），班次跨过 3h 窗口
+// 边界后 SWR 刷新前读到旧 null 会造成灰色高百分比闪现。这里用缓存的 bookable（原始余票）
+// 按现在的时间重新判定，消除闪现；免费班次或老缓存（无 bookable）原样返回。
+export function applyVisibility(trip, nowMs, dateStr) {
+  if (!trip || typeof trip !== "object") return trip;
+  if (trip.paid !== true || trip.bookable == null) return trip;
+  const tMs = depToMs(trip.dep, dateStr || beijingDateStr(nowMs));
+  const visible = isVisible(nowMs, tMs);
+  const available = visible ? trip.bookable : null;
+  if (available === trip.available) return trip;
+  return { ...trip, available, visible };
+}
+
 // 同一响应整份 TTL：取所有相关车次的最小 TTL（双向同 T 共享节拍，§3.1 注）
 export function minTtl(ttls) {
   const valid = ttls.filter((t) => t != null);

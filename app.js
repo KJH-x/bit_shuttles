@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-10";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-14";
 import {
   formatClock,
   formatHM,
@@ -13,19 +13,21 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-10";
-import { now, syncClock } from "./lib/time.js?v=20260904-10";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-10";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-10";
+} from "./lib/schedule.js?v=20260904-14";
+import { now, syncClock } from "./lib/time.js?v=20260904-14";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-14";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-14";
 import {
   initAvail,
   setDate as setAvailDate,
   refreshUpcoming,
+  refreshNow as refreshAvailNow,
   mainAvailText,
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-10";
+} from "./lib/availability.js?v=20260904-14";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-14";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -59,6 +61,7 @@ const dom = {
   runningTitle: document.getElementById("runningTitle"),
   amapButtons: [...document.querySelectorAll(".amap-links__btn")],
   amapQr: document.getElementById("amapQr"),
+  trafficLiveNote: document.getElementById("trafficLiveNote"),
   fidsBody: document.getElementById("fidsBody"),
   tripColumnA: document.getElementById("tripColumnA"),
   tripColumnC: document.getElementById("tripColumnC"),
@@ -81,7 +84,8 @@ const state = {
   fidsAutoScroll: false,
   viewDate: null, // null=跟随真实今天；否则 'YYYY-MM-DD'
   availMap: new Map(), // `${route}|${dep}` → avail
-  traffic: null
+  traffic: null,
+  trafficLive: null
 };
 
 function dayKind(date) {
@@ -180,6 +184,20 @@ function renderTraffic() {
   badge.textContent = `${arrow} 今日客流 ${t.delta} · ${label}`;
   badge.classList.toggle("traffic-badge--red", t.color === "red");
   badge.classList.toggle("traffic-badge--green", t.color === "green");
+}
+
+// 高德路况数据龄提示：实时数据存在 fwd/rev 任一时显示「更新于 HH:MM · N 分钟前」，否则隐藏
+function renderTrafficNote(now) {
+  const note = dom.trafficLiveNote;
+  if (!note) return;
+  const live = state.trafficLive;
+  if (live && live.available && live.dirs && (live.dirs.fwd || live.dirs.rev) && typeof live.fetchedAt === "number") {
+    const ageMin = Math.max(1, Math.round((now - live.fetchedAt) / 60000));
+    note.textContent = `路况更新于 ${formatHM(new Date(live.fetchedAt))} · ${ageMin} 分钟前`;
+    note.hidden = false;
+  } else {
+    note.hidden = true;
+  }
 }
 
 function activeTripsForNow() {
@@ -385,7 +403,7 @@ function makeBusMarker(trip, now) {
 }
 
 function updateBusMarker(el, trip, now) {
-  const p = trip.progress * 100;
+  const p = markerProgress(trip, state.trafficLive, now) * 100;
   const left = fwdTrip(trip) ? p : 100 - p;
   el.style.left = `${left}%`;
   const remaining = trip.arrMs - now;
@@ -394,6 +412,30 @@ function updateBusMarker(el, trip, now) {
   tip.textContent = `往${dest} · 剩余 ${formatDurationLabel(remaining)}`;
   const time = el.querySelector('[data-role="time"]');
   time.textContent = trip.dep;
+}
+
+// 渲染 lane 内圆角细条（路况色带）与检查点小圆点（分段 node，不附文字）
+function renderLaneRail(lane, rid) {
+  const rail = lane.querySelector("[data-rail]");
+  const cps = lane.querySelector("[data-cps]");
+  if (rail) {
+    // 与 ETA 注入同口径：仅数据新鲜（≤TRAFFIC_STALE_MS）时显示路况色带，过期/无数据保持透明
+    const fresh = realtimeDurMin(state.trafficLive, rid, Date.now()) != null;
+    const seg = fresh ? trafficForRoute(state.trafficLive, rid) : null;
+    rail.style.background = seg ? laneGradient(seg.segments, rid) : "";
+  }
+  if (!cps) return;
+  cps.textContent = "";
+  const points = CHECKPOINTS[rid];
+  if (!Array.isArray(points)) return;
+  const fwd = FWD.has(rid);
+  for (const cp of points) {
+    const dot = document.createElement("span");
+    dot.className = "lane-cp";
+    dot.title = checkpointLabel(cp);
+    dot.style.left = `${fwd ? cp.pos * 100 : (1 - cp.pos) * 100}%`;
+    cps.appendChild(dot);
+  }
 }
 
 function renderTrack(all, now) {
@@ -408,6 +450,7 @@ function renderTrack(all, now) {
 
     for (const rid of [corridor.fwd, corridor.rev]) {
       const lane = block.querySelector(`[data-lane="${rid}"]`);
+      renderLaneRail(lane, rid);
       const trips = corridorTrips.filter((t) => t.route === rid);
       const current = [...lane.querySelectorAll(".bus-marker")];
       const currentIds = new Set(current.map((el) => el.dataset.id));
@@ -446,15 +489,20 @@ function runningItemHtml(trip, now) {
   const elapsed = now - trip.depMs;
   const remaining = trip.arrMs - now;
   const pct = Math.round(trip.progress * 100);
-  const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
+const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
+  const cpMeta = CHECKPOINTS[trip.route] || [];
   const cpLine = cps.length
     ? `<div class="running-item__cp" data-role="checkpoints">${cps.map((cp, i) => {
         const passed = now >= cp.ms;
-        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${escapeHtml(cp.label)}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? '<span class="running-item__cp-arrow">→</span>' : ""}`;
+        const meta = cpMeta[i] || {};
+        const name = meta.name ? escapeHtml(meta.name) : escapeHtml(cp.label);
+        const suffix = meta.note ? `<span class="running-item__cp-suffix">${escapeHtml(meta.note)}</span>` : "";
+        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${name}${suffix}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? '<span class="running-item__cp-arrow">→</span>' : ""}`;
       }).join("")}</div>`
     : "";
-  return `
+return `
     <li class="running-item" data-id="${trip.id}" data-route="${trip.route}" data-rainbow="${trip.rainbow}" style="--pct:${pct}%">
+      <div class="running-item__pulse" aria-hidden="true"></div>
       <div class="running-item__head">
         <span class="running-item__time">${escapeHtml(trip.dep)}</span>
         <span class="running-item__route">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
@@ -470,8 +518,19 @@ function runningItemHtml(trip, now) {
   `;
 }
 
+// 运行详情排序：与轨道 lane 一致（中关村发车=rev 在上、良乡出发=fwd 在下，按走廊分组，同方向按开点升序）
+function routeRank(r) {
+  for (let i = 0; i < CORRIDORS.length; i++) {
+    if (r === CORRIDORS[i].rev) return i * 2;
+    if (r === CORRIDORS[i].fwd) return i * 2 + 1;
+  }
+  return CORRIDORS.length * 2;
+}
+
 function renderRunningList(all, now) {
-  const running = all.filter((t) => t.status === "running");
+  const running = all
+    .filter((t) => t.status === "running")
+    .sort((a, b) => routeRank(a.route) - routeRank(b.route) || a.depMs - b.depMs);
   const sig = running.map((t) => t.id).join(",");
   const n = running.length;
   dom.runningTitle.textContent = n ? `正在运行 (${n})` : "正在运行";
@@ -530,10 +589,11 @@ function tripItemHtml(trip, now, isNext) {
   const info = ticketInfo(trip, now);
   return `
     <li class="trip-item${isNext ? " trip-item--next" : ""}" data-id="${trip.id}" data-route="${trip.route}" data-dep="${escapeHtml(trip.dep)}">
-      <span class="trip-item__row1">
+<span class="trip-item__row1">
         <span class="trip-item__time">${escapeHtml(trip.dep)}</span>
         ${priceTagHtml(trip.price)}
         <span class="trip-item__ticket ${ticketClass(info)}" data-role="ticket">${escapeHtml(info.label)}</span>
+        <span class="trip-item__avail-l" data-role="avail-l" aria-hidden="true"></span>
       </span>
       <span class="trip-item__route">
         ${escapeHtml(ROUTE_LABEL[trip.route])}
@@ -547,6 +607,7 @@ function tripItemHtml(trip, now, isNext) {
 
 function updateTripAvail(li, trip) {
   const avEl = li.querySelector('[data-role="avail"]');
+  const lEl = li.querySelector('[data-role="avail-l"]');
   if (!avEl) return;
   const key = `${viewDateStr()}|${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
@@ -554,13 +615,19 @@ function updateTripAvail(li, trip) {
   if (!view) {
     avEl.textContent = "";
     avEl.className = "trip-item__avail";
+    if (lEl) { lEl.textContent = ""; lEl.className = "trip-item__avail-l"; }
     return;
   }
   avEl.className = `trip-item__avail avail--${view.color}`;
   const ageMs = tripAgeMs(trip.route, trip.dep) ?? availAgeMs();
   const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
-  const label = view.value === "售罄" ? "" : "<span class=\"trip-item__avail-l\">余</span>";
-  avEl.innerHTML = `${label}<span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
+  // 售罄不显示「余」（置于 row1 行右侧）；数字+数据龄留在 avail 块
+  const label = view.value === "售罄" ? "" : "余";
+  if (lEl) {
+    lEl.textContent = label;
+    lEl.className = `trip-item__avail-l${label ? ` avail-l--${view.color}` : ""}`;
+  }
+  avEl.innerHTML = `<span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
 }
 
 function renderList(ul, list, now, highlightNext) {
@@ -726,7 +793,11 @@ function registerSW() {
 
 /* ===== Tick loop ===== */
 function computeForDate(trips, n, refDate) {
-  return computeAll(trips, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, refDate);
+  const injected = trips.map((t) => {
+    const dur = realtimeDurMin(state.trafficLive, t.route, n);
+    return dur != null ? { ...t, dur } : t;
+  });
+  return computeAll(injected, n, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES, refDate);
 }
 
 function tick() {
@@ -744,6 +815,7 @@ function tick() {
   renderUpcoming(displayAll, n);
   renderStatus(displayAll, n);
   renderFids(todayAll, n);
+  renderTrafficNote(n);
   renderDateNav();
   if (state.fidsAutoScroll) {
     autoScrollFids();
@@ -778,6 +850,52 @@ function autoScrollFids() {
   (anchor || rows[0]).scrollIntoView({ block: "start" });
 }
 
+/* ===== 手动刷新：点击「即将开行」标题（灰闪一次）清缓存重拉余票 + 实时路况 =====
+   冷却：5 分钟内不重复触发（localStorage 记录上次刷新时刻）；
+   pages.dev 预览域名（domain-suffix 命中）不施冷却，方便开发反复刷新。 */
+const REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
+const REFRESH_TS_KEY = "bitbus-refresh-ts";
+
+function refreshCooldownEnabled() {
+  return !/\.pages\.dev$/i.test(location.hostname);
+}
+
+function bindRefreshBtn() {
+  const title = document.getElementById("upcomingTitle");
+  if (!title) return;
+  let flashing = false;
+  const flash = () => {
+    title.classList.add("upcoming-title--flash");
+    if (flashing) return;
+    flashing = true;
+    setTimeout(() => {
+      title.classList.remove("upcoming-title--flash");
+      flashing = false;
+    }, 350);
+  };
+  const doRefresh = () => {
+    refreshAvailNow();
+    refreshTrafficNow();
+    state.upcomingSig = "";
+    state.fidsSig = "";
+    tick();
+  };
+  const onClick = (e) => {
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+    if (e.type === "keydown") e.preventDefault();
+    flash();
+    if (refreshCooldownEnabled()) {
+      const last = Number(localStorage.getItem(REFRESH_TS_KEY) || 0);
+      const now = Date.now();
+      if (now - last < REFRESH_COOLDOWN_MS) return; // 冷却中
+      localStorage.setItem(REFRESH_TS_KEY, String(now));
+    }
+    doRefresh();
+  };
+  title.addEventListener("click", onClick);
+  title.addEventListener("keydown", onClick);
+}
+
 /* ===== Init ===== */
 hideXishanUi();
 bindTheme();
@@ -786,7 +904,15 @@ bindChips();
 bindDetailToggle();
 bindAmapQr();
 bindDateNav();
+bindRefreshBtn();
 initAvailBridge();
+initTraffic((data) => {
+  state.trafficLive = data;
+  state.upcomingSig = "";
+  state.runningSig = "";
+  state.fidsSig = "";
+  tick();
+});
 document.addEventListener("click", () => {
   document.querySelectorAll(".bus-marker--active").forEach((m) => m.classList.remove("bus-marker--active"));
 });
@@ -801,6 +927,8 @@ if (initQQBrowserGuide()) {
 applyView();
 tick();
 setInterval(tick, 1000);
+
+
 
 
 

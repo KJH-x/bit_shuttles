@@ -129,20 +129,20 @@ test("lookupDuration: uses nearest interpolation for off-grid times", () => {
   assert.equal(lookupDuration("20:40", profile), 48);
 });
 
-test("tripDuration: durations over 1 hour are capped at 60 min", () => {
+test("tripDuration: durations over 1 hour are no longer capped", () => {
   const tripC = { id: "c1", route: "c", dep: "17:20", price: "¥10.00", rainbow: false };
-  assert.equal(tripDuration(tripC, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 60);
+  assert.equal(tripDuration(tripC, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 80);
   const tripA = { id: "a1", route: "a", dep: "17:20", price: "¥10.00", rainbow: false };
   assert.equal(tripDuration(tripA, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES), 53);
 });
 
-test("tripStatus: route c arrival reflects capped profile duration", () => {
+test("tripStatus: route c arrival reflects uncapped profile duration", () => {
   const tripC = { id: "c16", route: "c", dep: "17:20", price: "¥10.00", rainbow: false };
   const depMs = depToMs("17:20", new Date("2026-09-01T16:00:00+08:00"));
   const st = tripStatus(tripC, depMs + 30 * 60000, DURATION_BY_ROUTE, DURATION_MIN, DURATION_PROFILES);
-  assert.equal(st.arrMs - st.depMs, 60 * 60000);
+  assert.equal(st.arrMs - st.depMs, 80 * 60000);
   assert.equal(st.status, "running");
-  assert.ok(Math.abs(st.progress - 0.5) < 1e-9);
+  assert.ok(Math.abs(st.progress - 0.375) < 1e-9);
 });
 
 test("computeAll returns one entry per trip", () => {
@@ -204,6 +204,7 @@ test("ticketInfo: regular trips open T-1h, countdown before", () => {
 
   const closed = ticketInfo(trip, depMs - 2 * 60000);
   assert.equal(closed.phase, "closed");
+  assert.equal(closed.label, "可买不可退"); // T-5 起改为「可买不可退」，取消「已停止售票」
 });
 
 test("departureLabel: countdown before, 即将发车 within 1min, 已发车 within T+10, hidden label", () => {
@@ -253,23 +254,23 @@ test("checkpointTimes: 按 pos 比例计算各检查点时刻", () => {
   assert.equal(times[0].label, "京良收费站");
 });
 
-test("campusStopAt: 良乡出发 T-10~T+6 显示「开始上车」", () => {
+test("campusStopAt: 良乡出发 T-10~T+6 显示「开始上车 · 东校区上车点」", () => {
   const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
   const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs };
-  assert.equal(campusStopAt(trip, depMs - 5 * 60000, CAMPUS.a), "开始上车");
-  assert.equal(campusStopAt(trip, depMs + 1 * 60000, CAMPUS.a), "开始上车");
-  assert.equal(campusStopAt(trip, depMs + 4 * 60000, CAMPUS.a), "开始上车");
-  assert.equal(campusStopAt(trip, depMs + 6 * 60000, CAMPUS.a), "开始上车"); // T+6 边界含
+  assert.equal(campusStopAt(trip, depMs - 5 * 60000, CAMPUS.a), "开始上车 · 东校区上车点");
+  assert.equal(campusStopAt(trip, depMs + 1 * 60000, CAMPUS.a), "开始上车 · 东校区上车点");
+  assert.equal(campusStopAt(trip, depMs + 4 * 60000, CAMPUS.a), "开始上车 · 东校区上车点");
+  assert.equal(campusStopAt(trip, depMs + 6 * 60000, CAMPUS.a), "开始上车 · 东校区上车点"); // T+6 边界含
   assert.equal(campusStopAt(trip, depMs + 7 * 60000, CAMPUS.a), null);
   assert.equal(campusStopAt(trip, depMs - 12 * 60000, CAMPUS.a), null);
 });
 
-test("campusStopAt: 中关村出发 T-10~T+5 显示「开始上车」", () => {
+test("campusStopAt: 中关村出发 T-10~T+5 显示「开始上车 · 西门上车点」", () => {
   const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
   const trip = { id: "h", route: "c", dep: "12:00", price: "¥10.00", rainbow: false, depMs };
-  assert.equal(campusStopAt(trip, depMs - 5 * 60000, CAMPUS.c), "开始上车");
-  assert.equal(campusStopAt(trip, depMs + 3 * 60000, CAMPUS.c), "开始上车");
-  assert.equal(campusStopAt(trip, depMs + 5 * 60000, CAMPUS.c), "开始上车"); // T+5 边界含
+  assert.equal(campusStopAt(trip, depMs - 5 * 60000, CAMPUS.c), "开始上车 · 西门上车点");
+  assert.equal(campusStopAt(trip, depMs + 3 * 60000, CAMPUS.c), "开始上车 · 西门上车点");
+  assert.equal(campusStopAt(trip, depMs + 5 * 60000, CAMPUS.c), "开始上车 · 西门上车点"); // T+5 边界含
   assert.equal(campusStopAt(trip, depMs + 6 * 60000, CAMPUS.c), null);
 });
 
@@ -291,7 +292,7 @@ test("arrivalStopAt: 到达顺序按时间窗口推进，最后停留在末站",
 test("tripLocation: 校内 / 路上距下一站 / 已到达（停站推进）", () => {
   const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
   const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs: depMs + 60 * 60000 };
-  assert.equal(tripLocation(trip, depMs - 5 * 60000, CHECKPOINTS.a, CAMPUS.a).text, "开始上车");
+  assert.equal(tripLocation(trip, depMs - 5 * 60000, CHECKPOINTS.a, CAMPUS.a).text, "开始上车 · 东校区上车点");
   // 等待发车：位置显示出发点（良乡=东校区上车点）
   const wait = tripLocation(trip, depMs - 12 * 60000, CHECKPOINTS.a, CAMPUS.a);
   assert.equal(wait.kind, "wait");

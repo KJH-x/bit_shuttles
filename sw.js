@@ -1,4 +1,4 @@
-const CACHE_NAME = "bitbus-static-v20260904-10";
+const CACHE_NAME = "bitbus-static-v20260904-14";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -15,6 +15,7 @@ const CORE_ASSETS = [
   "/lib/schedule.js",
   "/lib/time.js",
   "/lib/availability.js",
+  "/lib/traffic.js",
   "/lib/duration-profiles.js",
   "/lib/install-guide.js",
   "/lib/qq-guide.js"
@@ -35,6 +36,13 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+
+  // 动态 API 一律放行（不走缓存），保证余座/实时路况实时更新，页面刷新即可见
+  const reqUrl = new URL(req.url);
+  if (reqUrl.pathname.startsWith("/api/")) {
+    event.respondWith(fetch(req));
+    return;
+  }
 
   if (req.mode === "navigate") {
     event.respondWith(

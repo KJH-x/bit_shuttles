@@ -4,6 +4,7 @@ import {
   paidPhaseTtl,
   freeTtl,
   isVisible,
+  applyVisibility,
   minTtl,
   depToMs,
   beijingDateStr,
@@ -120,6 +121,28 @@ test("trafficView: 客流升高=红 up / 降低=绿 down", () => {
   assert.equal(down.color, "green");
   assert.equal(trafficView(null, 0.5), null);
   assert.equal(trafficView(0.5, null), null);
+});
+
+test("applyVisibility: 缓存里冻结的 available=null 按当前时刻重算（窗口内恢复数字）", () => {
+  const date = "2026-09-04";
+  const T = depToMs("18:00", date);
+  // 快照时为窗口外（T-now>3h）→ available=null 被写入缓存
+  const cached = { route: "a", dep: "18:00", paid: true, bookable: 12, available: null, total: 51, pct: 24 };
+  // 现在进入窗口（T-now=1h）→ 重算恢复数字
+  const inside = applyVisibility(cached, T - 60 * 60000, date);
+  assert.equal(inside.available, 12);
+  // 仍窗口外 → 保持 null（值未变，常返回同一对象引用）
+  assert.equal(applyVisibility(cached, T - 4 * 3600 * 1000, date), cached);
+});
+
+test("applyVisibility: 免费班次 / 无 bookable 的老缓存原样返回", () => {
+  const date = "2026-09-04";
+  const freeTrip = { route: "a", dep: "18:00", paid: false, bookable: 5, available: 5, total: 51 };
+  assert.equal(applyVisibility(freeTrip, Date.now(), date), freeTrip);
+  const legacy = { route: "a", dep: "18:00", paid: true, available: null, total: 51, pct: 24 };
+  assert.equal(applyVisibility(legacy, Date.now(), date), legacy);
+  assert.equal(applyVisibility(null, Date.now(), date), null);
+  assert.deepEqual(applyVisibility({}, Date.now(), date), {});
 });
 
 test("shiftDate: 前后偏移", () => {

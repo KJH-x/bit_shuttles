@@ -472,6 +472,21 @@ section[aria-labelledby="runningTitle"] .panel__head {
   color: var(--tag-text);
 }
 
+/* 「即将开行」标题 = 手动刷新入口（⟳ 内嵌）：无边框/无背景/无 hover 响应，点击时灰闪一次 */
+.upcoming-title {
+  cursor: pointer;
+  user-select: none;
+}
+.upcoming-title__refresh {
+  font-size: .8em;
+  font-weight: 400;
+  color: inherit;
+}
+.upcoming-title--flash {
+  color: var(--muted);
+  transition: color .25s ease;
+}
+
 /* ===== Route Track (per-corridor bidirectional lanes) ===== */
 .route-track {
   position: relative;
@@ -522,26 +537,11 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-size: .8rem;
 }
 
-.route-track__checkpoint {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--accent-light);
-  color: var(--tag-text);
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: .68rem;
-  font-weight: 600;
-  white-space: nowrap;
-  z-index: 2;
-  opacity: .92;
-}
-
-/* Each lane: a horizontal progress line with absolute-positioned bus markers.
-   Background hidden to keep a single central rounded rectangle; bus markers remain. */
+/* Each lane: a thin rounded rail (traffic-band), checkpoint dots, and absolute bus markers.
+   Lane itself is transparent and short; the visible line is `.lane__rail` below the markers. */
 .lane {
   position: relative;
-  height: 46px;
+  height: 26px;
   border-radius: 999px;
 }
 
@@ -555,6 +555,37 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .lane[hidden] {
   display: none;
+}
+
+/* 圆角细条：位于 marker 下方、route bar 上方的路况线（透明时仅淡淡底框，无实时数据不显示色带） */
+.lane__rail {
+  position: absolute;
+  top: calc(50% + 8px);
+  left: 2px;
+  right: 2px;
+  transform: translateY(-50%);
+  height: 6px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--track-bound);
+  opacity: .85;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 检查点小圆点 node（分段），不附文字；悬停 title 提示名称 */
+.lane__cps .lane-cp {
+  position: absolute;
+  top: calc(50% + 8px);
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--track-bound);
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* bus marker: pill (rounded rect, r=1/2 height) with a direction tip */
@@ -745,6 +776,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
   content: "";
   position: absolute;
   inset: 0;
+  left: 0;
+  right: auto;
   width: var(--pct, 0%);
   background: color-mix(in srgb, var(--dir-a) 18%, transparent);
   pointer-events: none;
@@ -757,6 +790,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .running-item[data-route="c"]::before {
   background: color-mix(in srgb, var(--dir-c) 18%, transparent);
+  left: auto;
+  right: 0;
 }
 
 .running-item[data-route="d"]::before {
@@ -765,6 +800,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .running-item[data-route="e"]::before {
   background: color-mix(in srgb, var(--dir-e) 18%, transparent);
+  left: auto;
+  right: 0;
 }
 
 .running-item[data-rainbow="true"]::before {
@@ -779,6 +816,66 @@ section[aria-labelledby="runningTitle"] .panel__head {
 .running-item > * {
   position: relative;
   z-index: 1;
+}
+
+/* 扫描高亮波纹条：波前高亮、向后渐隐；经 mask 裁剪到已行进度区间（0~--pct），波到进度处即逐渐消失 */
+.running-item .running-item__pulse {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  mask: linear-gradient(90deg, #000 0, #000 var(--pct, 0%), transparent var(--pct, 0%));
+  -webkit-mask: linear-gradient(90deg, #000 0, #000 var(--pct, 0%), transparent var(--pct, 0%));
+}
+
+.running-item__pulse::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  background: linear-gradient(90deg,
+    rgba(250, 250, 250, 0) 0%,
+    rgba(250, 250, 250, 0) 30%,
+    rgba(250, 250, 250, .45) 78%,
+    rgba(250, 250, 250, .9) 100%);
+  animation: running-pulse-sweep 3s linear infinite;
+}
+
+/* fwd（a/d）：波纹从左向右扫，波前（右侧）由容器左缘扫到右缘 */
+@keyframes running-pulse-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(194.12%); }
+}
+
+/* rev（c/e，中关村发车）：蒙版改为从右往左裁，波纹从右向左扫，波前在左侧 */
+.running-item[data-route="c"] .running-item__pulse,
+.running-item[data-route="e"] .running-item__pulse {
+  mask: linear-gradient(270deg, #000 0, #000 var(--pct, 0%), transparent var(--pct, 0%));
+  -webkit-mask: linear-gradient(270deg, #000 0, #000 var(--pct, 0%), transparent var(--pct, 0%));
+}
+
+.running-item[data-route="c"] .running-item__pulse::before,
+.running-item[data-route="e"] .running-item__pulse::before {
+  background: linear-gradient(270deg,
+    rgba(250, 250, 250, 0) 0%,
+    rgba(250, 250, 250, 0) 30%,
+    rgba(250, 250, 250, .45) 78%,
+    rgba(250, 250, 250, .9) 100%);
+  animation-name: running-pulse-sweep-rev;
+}
+
+@keyframes running-pulse-sweep-rev {
+  from { transform: translateX(294.12%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running-item__pulse::before {
+    animation: none;
+  }
 }
 
 .running-item__head {
@@ -832,6 +929,24 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-size: .78rem;
   font-weight: 600;
   color: var(--muted);
+}
+
+.amap-links__live {
+  margin-left: 8px;
+  font-size: .78rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* corridor 内的小字路况提示：贴在门道右上，不占布局高度；绘制在巴士图层(z-index:3)之下 */
+.amap-links__live--corridor {
+  position: absolute;
+  top: -4px;
+  right: 4px;
+  margin-left: 0;
+  z-index: 1;
+  font-size: .72rem;
+  pointer-events: none;
 }
 
 .amap-links__btns {
@@ -1287,6 +1402,18 @@ section[aria-labelledby="runningTitle"] .panel__head {
   gap: 10px;
 }
 
+/* 「余」标签：置于 row1 行内，独自右对齐（margin-left:auto 推向其右侧） */
+.trip-item__row1 .trip-item__avail-l {
+  margin-left: auto;
+  font-size: .95rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+}
+.trip-item__row1 .trip-item__avail-l.avail-l--green { color: var(--success); }
+.trip-item__row1 .trip-item__avail-l.avail-l--yellow { color: var(--warning); }
+.trip-item__row1 .trip-item__avail-l.avail-l--red { color: var(--danger); }
+
 .trip-item__time {
   font-size: 1.25rem;
   font-weight: 800;
@@ -1592,14 +1719,10 @@ section[aria-labelledby="runningTitle"] .panel__head {
     max-width: 100%;
   }
 
-  /* 主视图运行图窄屏：站点省略为京良/杜家坎/六里桥，底色与文字对调 */
-  .checkpoint-suffix {
+  /* 主视图运行图窄屏：无检查点文字（改为 lane 内圆点） */
+
+  /* 运行详情检查点窄屏：省略「收费站」后缀（与顶部进度条一致） */
+  .running-item__cp-suffix {
     display: none;
-  }
-  .route-track__checkpoint {
-    background: var(--tag-text);
-    color: var(--accent-light);
-    padding: 2px 6px;
-    font-size: .6rem;
   }
 }
