@@ -15,6 +15,7 @@ import {
   paidPhaseTtl,
   freeTtl,
   isVisible,
+  applyVisibility,
   minTtl,
   NAME_TO_ROUTE
 } from "../_shared/ttl.js";
@@ -77,7 +78,8 @@ function computeTrip(row, seatData, nowMs, date, isToday) {
   const availableRaw = bookable > 0 ? bookable : 0;
   const available = paid && !visible ? null : availableRaw;
   const pct = availableRaw != null && total > 0 ? Math.round((availableRaw / total) * 100) : null;
-  return { route, dep, name: row.name, paid, rainbow, phase, ttl, visible, available, total, pct };
+  // bookable=原始余票：缓存用，供 applyVisibility 按当前时刻重算可见性（避免窗口跨边界的灰色闪现）
+  return { route, dep, name: row.name, paid, rainbow, phase, ttl, visible, available, bookable, total, pct };
 }
 
 // 批量刷新今日：get-list + 逐趟 get-reserved-seats → 写 trip 缓存 + live 缓存 + 快照 + 客流
@@ -238,7 +240,7 @@ export async function onRequest({ request, env, waitUntil }) {
           dep: depParam,
           minTtl: ttlSec,
           source: fresh ? "cache" : "stale",
-          trips: [cached]
+          trips: [applyVisibility(cached, nowMs, date)]
         },
         200,
         cacheHeaders(ttlSec)
@@ -257,7 +259,7 @@ export async function onRequest({ request, env, waitUntil }) {
       const paid = trip ? trip.paid === true : false;
       const ttlSec = trip && trip.ttl != null && trip.ttl > 0 ? trip.ttl : LIVE_DEFAULT_TTL;
       return json(
-        { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: ttlSec, source: "live", trips: trip ? [trip] : [] },
+        { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: ttlSec, source: "live", trips: trip ? [applyVisibility(trip, nowMs, date)] : [] },
         200,
         cacheHeaders(ttlSec)
       );
@@ -286,7 +288,7 @@ export async function onRequest({ request, env, waitUntil }) {
       );
     }
     return json(
-      { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", traffic: live.traffic || null, trips: live.trips },
+      { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", traffic: live.traffic || null, trips: live.trips.map((t) => applyVisibility(t, nowMs, date)) },
       200,
       cacheHeaders(ttl)
     );
@@ -296,7 +298,7 @@ export async function onRequest({ request, env, waitUntil }) {
   try {
     const { trips, traffic, mTtl } = await refreshAll(env, secret, schemeOrder, date, nowMs, isToday);
     return json(
-      { serverNow: nowMs, date, minTtl: mTtl, source: "live", traffic, trips },
+      { serverNow: nowMs, date, minTtl: mTtl, source: "live", traffic, trips: trips.map((t) => applyVisibility(t, nowMs, date)) },
       200,
       cacheHeaders(mTtl)
     );

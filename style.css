@@ -472,31 +472,19 @@ section[aria-labelledby="runningTitle"] .panel__head {
   color: var(--tag-text);
 }
 
-/* 「即将开行」旁的手动刷新按钮（⟳）：轻量图标按钮，点击旋转反馈 */
-.refresh-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-size: 1.05rem;
-  line-height: 1;
-  border: 1.5px solid var(--border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
+/* 「即将开行」标题 = 手动刷新入口（⟳ 内嵌）：无边框/无背景/无 hover 响应，点击时灰闪一次 */
+.upcoming-title {
   cursor: pointer;
-  transition: color .15s ease, border-color .15s ease, transform .3s ease;
+  user-select: none;
 }
-.refresh-btn:hover {
-  color: var(--primary);
-  border-color: var(--primary);
+.upcoming-title__refresh {
+  font-size: .8em;
+  font-weight: 400;
+  color: inherit;
 }
-.refresh-btn--spinning {
-  color: var(--primary);
-  border-color: var(--primary);
-  transform: rotate(360deg);
+.upcoming-title--flash {
+  color: var(--muted);
+  transition: color .25s ease;
 }
 
 /* ===== Route Track (per-corridor bidirectional lanes) ===== */
@@ -788,6 +776,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
   content: "";
   position: absolute;
   inset: 0;
+  left: 0;
+  right: auto;
   width: var(--pct, 0%);
   background: color-mix(in srgb, var(--dir-a) 18%, transparent);
   pointer-events: none;
@@ -800,6 +790,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .running-item[data-route="c"]::before {
   background: color-mix(in srgb, var(--dir-c) 18%, transparent);
+  left: auto;
+  right: 0;
 }
 
 .running-item[data-route="d"]::before {
@@ -808,6 +800,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .running-item[data-route="e"]::before {
   background: color-mix(in srgb, var(--dir-e) 18%, transparent);
+  left: auto;
+  right: 0;
 }
 
 .running-item[data-rainbow="true"]::before {
@@ -822,6 +816,66 @@ section[aria-labelledby="runningTitle"] .panel__head {
 .running-item > * {
   position: relative;
   z-index: 1;
+}
+
+/* 扫描高亮波纹条：波前高亮、向后渐隐；经 mask 裁剪到已行进度区间（0~--pct），波到进度处即逐渐消失 */
+.running-item .running-item__pulse {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  mask: linear-gradient(90deg, #000 0, #000 var(--pct, 0%), transparent var(--pct, 0%));
+  -webkit-mask: linear-gradient(90deg, #000 0, #000 var(--pct, 0%), transparent var(--pct, 0%));
+}
+
+.running-item__pulse::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  background: linear-gradient(90deg,
+    rgba(250, 250, 250, 0) 0%,
+    rgba(250, 250, 250, 0) 30%,
+    rgba(250, 250, 250, .45) 78%,
+    rgba(250, 250, 250, .9) 100%);
+  animation: running-pulse-sweep 3s linear infinite;
+}
+
+/* fwd（a/d）：波纹从左向右扫，波前（右侧）由容器左缘扫到右缘 */
+@keyframes running-pulse-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(194.12%); }
+}
+
+/* rev（c/e，中关村发车）：蒙版改为从右往左裁，波纹从右向左扫，波前在左侧 */
+.running-item[data-route="c"] .running-item__pulse,
+.running-item[data-route="e"] .running-item__pulse {
+  mask: linear-gradient(270deg, #000 0, #000 var(--pct, 0%), transparent var(--pct, 0%));
+  -webkit-mask: linear-gradient(270deg, #000 0, #000 var(--pct, 0%), transparent var(--pct, 0%));
+}
+
+.running-item[data-route="c"] .running-item__pulse::before,
+.running-item[data-route="e"] .running-item__pulse::before {
+  background: linear-gradient(270deg,
+    rgba(250, 250, 250, 0) 0%,
+    rgba(250, 250, 250, 0) 30%,
+    rgba(250, 250, 250, .45) 78%,
+    rgba(250, 250, 250, .9) 100%);
+  animation-name: running-pulse-sweep-rev;
+}
+
+@keyframes running-pulse-sweep-rev {
+  from { transform: translateX(294.12%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running-item__pulse::before {
+    animation: none;
+  }
 }
 
 .running-item__head {
@@ -884,14 +938,15 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-weight: 600;
 }
 
-/* corridor 内的小字路况提示：贴在门道右上，不占布局高度 */
+/* corridor 内的小字路况提示：贴在门道右上，不占布局高度；绘制在巴士图层(z-index:3)之下 */
 .amap-links__live--corridor {
   position: absolute;
   top: -4px;
   right: 4px;
   margin-left: 0;
-  z-index: 5;
+  z-index: 1;
   font-size: .72rem;
+  pointer-events: none;
 }
 
 .amap-links__btns {

@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-12";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-13";
 import {
   formatClock,
   formatHM,
@@ -13,10 +13,10 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-12";
-import { now, syncClock } from "./lib/time.js?v=20260904-12";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-12";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-12";
+} from "./lib/schedule.js?v=20260904-13";
+import { now, syncClock } from "./lib/time.js?v=20260904-13";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-13";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-13";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -26,8 +26,8 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-12";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-12";
+} from "./lib/availability.js?v=20260904-13";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-13";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -496,8 +496,9 @@ function runningItemHtml(trip, now) {
         return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${escapeHtml(cp.label)}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? '<span class="running-item__cp-arrow">→</span>' : ""}`;
       }).join("")}</div>`
     : "";
-  return `
+return `
     <li class="running-item" data-id="${trip.id}" data-route="${trip.route}" data-rainbow="${trip.rainbow}" style="--pct:${pct}%">
+      <div class="running-item__pulse" aria-hidden="true"></div>
       <div class="running-item__head">
         <span class="running-item__time">${escapeHtml(trip.dep)}</span>
         <span class="running-item__route">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
@@ -513,8 +514,19 @@ function runningItemHtml(trip, now) {
   `;
 }
 
+// 运行详情排序：与轨道 lane 一致（中关村发车=rev 在上、良乡出发=fwd 在下，按走廊分组，同方向按开点升序）
+function routeRank(r) {
+  for (let i = 0; i < CORRIDORS.length; i++) {
+    if (r === CORRIDORS[i].rev) return i * 2;
+    if (r === CORRIDORS[i].fwd) return i * 2 + 1;
+  }
+  return CORRIDORS.length * 2;
+}
+
 function renderRunningList(all, now) {
-  const running = all.filter((t) => t.status === "running");
+  const running = all
+    .filter((t) => t.status === "running")
+    .sort((a, b) => routeRank(a.route) - routeRank(b.route) || a.depMs - b.depMs);
   const sig = running.map((t) => t.id).join(",");
   const n = running.length;
   dom.runningTitle.textContent = n ? `正在运行 (${n})` : "正在运行";
@@ -826,28 +838,50 @@ function autoScrollFids() {
   (anchor || rows[0]).scrollIntoView({ block: "start" });
 }
 
-/* ===== 手动刷新：清缓存重拉余票 + 实时路况 ===== */
+/* ===== 手动刷新：点击「即将开行」标题（灰闪一次）清缓存重拉余票 + 实时路况 =====
+   冷却：5 分钟内不重复触发（localStorage 记录上次刷新时刻）；
+   pages.dev 预览域名（domain-suffix 命中）不施冷却，方便开发反复刷新。 */
+const REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
+const REFRESH_TS_KEY = "bitbus-refresh-ts";
+
+function refreshCooldownEnabled() {
+  return !/\.pages\.dev$/i.test(location.hostname);
+}
+
 function bindRefreshBtn() {
-  const btn = document.getElementById("refreshBtn");
-  if (!btn) return;
-  let spinning = false;
-  const spin = () => {
-    btn.classList.add("refresh-btn--spinning");
-    if (spinning) return;
-    spinning = true;
+  const title = document.getElementById("upcomingTitle");
+  if (!title) return;
+  let flashing = false;
+  const flash = () => {
+    title.classList.add("upcoming-title--flash");
+    if (flashing) return;
+    flashing = true;
     setTimeout(() => {
-      btn.classList.remove("refresh-btn--spinning");
-      spinning = false;
-    }, 800);
+      title.classList.remove("upcoming-title--flash");
+      flashing = false;
+    }, 350);
   };
-  btn.addEventListener("click", () => {
-    spin();
+  const doRefresh = () => {
     refreshAvailNow();
     refreshTrafficNow();
     state.upcomingSig = "";
     state.fidsSig = "";
     tick();
-  });
+  };
+  const onClick = (e) => {
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+    if (e.type === "keydown") e.preventDefault();
+    flash();
+    if (refreshCooldownEnabled()) {
+      const last = Number(localStorage.getItem(REFRESH_TS_KEY) || 0);
+      const now = Date.now();
+      if (now - last < REFRESH_COOLDOWN_MS) return; // 冷却中
+      localStorage.setItem(REFRESH_TS_KEY, String(now));
+    }
+    doRefresh();
+  };
+  title.addEventListener("click", onClick);
+  title.addEventListener("keydown", onClick);
 }
 
 /* ===== Init ===== */

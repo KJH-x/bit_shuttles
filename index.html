@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260904-12">
+  <link rel="stylesheet" href="style.css?v=20260904-13">
 </head>
 <body>
   <a href="#view-main" class="skip-link">跳转到主内容</a>
@@ -117,8 +117,7 @@
 
     <section class="panel" aria-labelledby="upcomingTitle">
 <div class="panel__head panel__head--upcoming">
-        <h2 class="panel__title" id="upcomingTitle">即将开行</h2>
-        <button class="btn btn--ghost refresh-btn" id="refreshBtn" type="button" title="刷新余座与实时路况" aria-label="刷新数据">⟳</button>
+        <h2 class="panel__title upcoming-title" id="upcomingTitle" role="button" tabindex="0" title="刷新余座与实时路况">即将开行<span class="upcoming-title__refresh" aria-hidden="true"> ⟳</span></h2>
         <div class="upcoming-controls">
           <div class="date-nav" role="group" aria-label="切换日期">
             <button class="date-nav__btn" id="datePrev" type="button" aria-label="前一天">‹</button>
@@ -197,7 +196,7 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260904-12" type="module"></script></body>
+  <script src="app.js?v=20260904-13" type="module"></script></body>
 </html>
 
 
