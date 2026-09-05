@@ -1402,6 +1402,18 @@ section[aria-labelledby="runningTitle"] .panel__head {
   gap: 10px;
 }
 
+/* 「余」标签：置于 row1 行内，独自右对齐（margin-left:auto 推向其右侧） */
+.trip-item__row1 .trip-item__avail-l {
+  margin-left: auto;
+  font-size: .95rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+}
+.trip-item__row1 .trip-item__avail-l.avail-l--green { color: var(--success); }
+.trip-item__row1 .trip-item__avail-l.avail-l--yellow { color: var(--warning); }
+.trip-item__row1 .trip-item__avail-l.avail-l--red { color: var(--danger); }
+
 .trip-item__time {
   font-size: 1.25rem;
   font-weight: 800;

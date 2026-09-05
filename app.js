@@ -589,10 +589,11 @@ function tripItemHtml(trip, now, isNext) {
   const info = ticketInfo(trip, now);
   return `
     <li class="trip-item${isNext ? " trip-item--next" : ""}" data-id="${trip.id}" data-route="${trip.route}" data-dep="${escapeHtml(trip.dep)}">
-      <span class="trip-item__row1">
+<span class="trip-item__row1">
         <span class="trip-item__time">${escapeHtml(trip.dep)}</span>
         ${priceTagHtml(trip.price)}
         <span class="trip-item__ticket ${ticketClass(info)}" data-role="ticket">${escapeHtml(info.label)}</span>
+        <span class="trip-item__avail-l" data-role="avail-l" aria-hidden="true"></span>
       </span>
       <span class="trip-item__route">
         ${escapeHtml(ROUTE_LABEL[trip.route])}
@@ -606,6 +607,7 @@ function tripItemHtml(trip, now, isNext) {
 
 function updateTripAvail(li, trip) {
   const avEl = li.querySelector('[data-role="avail"]');
+  const lEl = li.querySelector('[data-role="avail-l"]');
   if (!avEl) return;
   const key = `${viewDateStr()}|${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
@@ -613,13 +615,19 @@ function updateTripAvail(li, trip) {
   if (!view) {
     avEl.textContent = "";
     avEl.className = "trip-item__avail";
+    if (lEl) { lEl.textContent = ""; lEl.className = "trip-item__avail-l"; }
     return;
   }
   avEl.className = `trip-item__avail avail--${view.color}`;
   const ageMs = tripAgeMs(trip.route, trip.dep) ?? availAgeMs();
   const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
-  const label = view.value === "售罄" ? "" : "<span class=\"trip-item__avail-l\">余</span>";
-  avEl.innerHTML = `${label}<span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
+  // 售罄不显示「余」（置于 row1 行右侧）；数字+数据龄留在 avail 块
+  const label = view.value === "售罄" ? "" : "余";
+  if (lEl) {
+    lEl.textContent = label;
+    lEl.className = `trip-item__avail-l${label ? ` avail-l--${view.color}` : ""}`;
+  }
+  avEl.innerHTML = `<span class="trip-item__avail-n">${view.value}</span><span class="trip-item__avail-ttl">${ttlText}</span>`;
 }
 
 function renderList(ul, list, now, highlightNext) {
