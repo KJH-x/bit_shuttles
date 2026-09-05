@@ -2,7 +2,7 @@ export const DURATION_MIN = 60;
 
 export const DURATION_BY_ROUTE = {};
 
-export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260904-13";
+export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260904-14";
 
 export const ROUTES = [
   { id: "a", label: "良乡 → 中关村" },
@@ -154,5 +154,6 @@ export const CAMPUS = {
     final: { segMin: 13, segKm: 6.7 }
   }
 };
+
 
 
