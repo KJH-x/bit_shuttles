@@ -472,6 +472,33 @@ section[aria-labelledby="runningTitle"] .panel__head {
   color: var(--tag-text);
 }
 
+/* 「即将开行」旁的手动刷新按钮（⟳）：轻量图标按钮，点击旋转反馈 */
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 1.05rem;
+  line-height: 1;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, transform .3s ease;
+}
+.refresh-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.refresh-btn--spinning {
+  color: var(--primary);
+  border-color: var(--primary);
+  transform: rotate(360deg);
+}
+
 /* ===== Route Track (per-corridor bidirectional lanes) ===== */
 .route-track {
   position: relative;
@@ -522,26 +549,11 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-size: .8rem;
 }
 
-.route-track__checkpoint {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--accent-light);
-  color: var(--tag-text);
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: .68rem;
-  font-weight: 600;
-  white-space: nowrap;
-  z-index: 2;
-  opacity: .92;
-}
-
-/* Each lane: a horizontal progress line with absolute-positioned bus markers.
-   Background hidden to keep a single central rounded rectangle; bus markers remain. */
+/* Each lane: a thin rounded rail (traffic-band), checkpoint dots, and absolute bus markers.
+   Lane itself is transparent and short; the visible line is `.lane__rail` below the markers. */
 .lane {
   position: relative;
-  height: 46px;
+  height: 26px;
   border-radius: 999px;
 }
 
@@ -555,6 +567,37 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .lane[hidden] {
   display: none;
+}
+
+/* 圆角细条：位于 marker 下方、route bar 上方的路况线（透明时仅淡淡底框，无实时数据不显示色带） */
+.lane__rail {
+  position: absolute;
+  top: calc(50% + 8px);
+  left: 2px;
+  right: 2px;
+  transform: translateY(-50%);
+  height: 6px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--track-bound);
+  opacity: .85;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 检查点小圆点 node（分段），不附文字；悬停 title 提示名称 */
+.lane__cps .lane-cp {
+  position: absolute;
+  top: calc(50% + 8px);
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--track-bound);
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* bus marker: pill (rounded rect, r=1/2 height) with a direction tip */
@@ -839,6 +882,16 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-size: .78rem;
   color: var(--muted);
   font-weight: 600;
+}
+
+/* corridor 内的小字路况提示：贴在门道右上，不占布局高度 */
+.amap-links__live--corridor {
+  position: absolute;
+  top: -4px;
+  right: 4px;
+  margin-left: 0;
+  z-index: 5;
+  font-size: .72rem;
 }
 
 .amap-links__btns {
@@ -1599,14 +1652,5 @@ section[aria-labelledby="runningTitle"] .panel__head {
     max-width: 100%;
   }
 
-  /* 主视图运行图窄屏：站点省略为京良/杜家坎/六里桥，底色与文字对调 */
-  .checkpoint-suffix {
-    display: none;
-  }
-  .route-track__checkpoint {
-    background: var(--tag-text);
-    color: var(--accent-light);
-    padding: 2px 6px;
-    font-size: .6rem;
-  }
+  /* 主视图运行图窄屏：无检查点文字（改为 lane 内圆点） */
 }

@@ -13,7 +13,8 @@ function json(data, status = 200, extraHeaders = {}) {
 }
 
 function cacheHeaders() {
-  return { "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=60" };
+  // 与 availability 一致：实时数据不加浏览器/边缘缓存（前端 60s 轮询即可）
+  return { "Cache-Control": "private, no-store" };
 }
 
 function dirsView(live) {

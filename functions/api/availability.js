@@ -53,7 +53,9 @@ function makeSchoolUrls(path, schemeOrder) {
 }
 
 function cacheHeaders(ttl) {
-  return { "Cache-Control": `public, max-age=${ttl}, s-maxage=${ttl}, stale-while-revalidate=${ttl * 2}` };
+  // 浏览器/边缘一律不缓存：新鲜度由 R2 缓存 + SWR（服务端 waitUntil 后台刷新）保证，
+  // 前端每次轮询都打回服务端，避免「刷新不更新、须 Ctrl+F5」的旧缓存问题。
+  return { "Cache-Control": "private, no-store" };
 }
 
 // 单趟计算：available = reservation_num − disable_seat 数；total = reserved + reservation_num − disable

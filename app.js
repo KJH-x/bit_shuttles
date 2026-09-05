@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-11";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-12";
 import {
   formatClock,
   formatHM,
@@ -13,20 +13,21 @@ import {
   checkpointOffsets,
   tripLocation,
   campusStopAt
-} from "./lib/schedule.js?v=20260904-11";
-import { now, syncClock } from "./lib/time.js?v=20260904-11";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-11";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-11";
+} from "./lib/schedule.js?v=20260904-12";
+import { now, syncClock } from "./lib/time.js?v=20260904-12";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-12";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-12";
 import {
   initAvail,
   setDate as setAvailDate,
   refreshUpcoming,
+  refreshNow as refreshAvailNow,
   mainAvailText,
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-11";
-import { initTraffic, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-11";
+} from "./lib/availability.js?v=20260904-12";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-12";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -413,6 +414,30 @@ function updateBusMarker(el, trip, now) {
   time.textContent = trip.dep;
 }
 
+// 渲染 lane 内圆角细条（路况色带）与检查点小圆点（分段 node，不附文字）
+function renderLaneRail(lane, rid) {
+  const rail = lane.querySelector("[data-rail]");
+  const cps = lane.querySelector("[data-cps]");
+  if (rail) {
+    // 与 ETA 注入同口径：仅数据新鲜（≤TRAFFIC_STALE_MS）时显示路况色带，过期/无数据保持透明
+    const fresh = realtimeDurMin(state.trafficLive, rid, Date.now()) != null;
+    const seg = fresh ? trafficForRoute(state.trafficLive, rid) : null;
+    rail.style.background = seg ? laneGradient(seg.segments, rid) : "";
+  }
+  if (!cps) return;
+  cps.textContent = "";
+  const points = CHECKPOINTS[rid];
+  if (!Array.isArray(points)) return;
+  const fwd = FWD.has(rid);
+  for (const cp of points) {
+    const dot = document.createElement("span");
+    dot.className = "lane-cp";
+    dot.title = checkpointLabel(cp);
+    dot.style.left = `${fwd ? cp.pos * 100 : (1 - cp.pos) * 100}%`;
+    cps.appendChild(dot);
+  }
+}
+
 function renderTrack(all, now) {
   const running = all.filter((t) => t.status === "running");
   const anyRunning = running.length > 0;
@@ -425,8 +450,7 @@ function renderTrack(all, now) {
 
     for (const rid of [corridor.fwd, corridor.rev]) {
       const lane = block.querySelector(`[data-lane="${rid}"]`);
-      const seg = trafficForRoute(state.trafficLive, rid);
-      lane.style.background = seg ? laneGradient(seg.segments, rid) : "";
+      renderLaneRail(lane, rid);
       const trips = corridorTrips.filter((t) => t.route === rid);
       const current = [...lane.querySelectorAll(".bus-marker")];
       const currentIds = new Set(current.map((el) => el.dataset.id));
@@ -802,6 +826,30 @@ function autoScrollFids() {
   (anchor || rows[0]).scrollIntoView({ block: "start" });
 }
 
+/* ===== 手动刷新：清缓存重拉余票 + 实时路况 ===== */
+function bindRefreshBtn() {
+  const btn = document.getElementById("refreshBtn");
+  if (!btn) return;
+  let spinning = false;
+  const spin = () => {
+    btn.classList.add("refresh-btn--spinning");
+    if (spinning) return;
+    spinning = true;
+    setTimeout(() => {
+      btn.classList.remove("refresh-btn--spinning");
+      spinning = false;
+    }, 800);
+  };
+  btn.addEventListener("click", () => {
+    spin();
+    refreshAvailNow();
+    refreshTrafficNow();
+    state.upcomingSig = "";
+    state.fidsSig = "";
+    tick();
+  });
+}
+
 /* ===== Init ===== */
 hideXishanUi();
 bindTheme();
@@ -810,6 +858,7 @@ bindChips();
 bindDetailToggle();
 bindAmapQr();
 bindDateNav();
+bindRefreshBtn();
 initAvailBridge();
 initTraffic((data) => {
   state.trafficLive = data;
@@ -832,6 +881,7 @@ if (initQQBrowserGuide()) {
 applyView();
 tick();
 setInterval(tick, 1000);
+
 
 
 

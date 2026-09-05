@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260904-11">
+  <link rel="stylesheet" href="style.css?v=20260904-12">
 </head>
 <body>
   <a href="#view-main" class="skip-link">跳转到主内容</a>
@@ -54,24 +54,32 @@
 
       <div class="route-track" id="trackMain">
         <div class="route-track__corridors" id="corridors">
-          <div class="route-corridor" data-corridor="main" aria-label="良乡 ⇄ 中关村">
+<div class="route-corridor" data-corridor="main" aria-label="良乡 ⇄ 中关村">
             <div class="route-track__bar" aria-hidden="true">
               <span class="route-track__end route-track__end--left">良乡</span>
-              <span class="route-track__checkpoint" style="left:25.4%">京良<span class="checkpoint-suffix">收费站</span></span>
-              <span class="route-track__checkpoint" style="left:41.4%">杜家坎<span class="checkpoint-suffix">收费站</span></span>
-              <span class="route-track__checkpoint" style="left:62.3%">六里桥</span>
               <span class="route-track__end route-track__end--right">中关村</span>
             </div>
-            <div class="lane lane--c" data-lane="c" role="img" aria-label="中关村 → 良乡"></div>
-            <div class="lane lane--a" data-lane="a" role="img" aria-label="良乡 → 中关村"></div>
+            <div class="lane lane--c" data-lane="c" role="img" aria-label="中关村 → 良乡">
+              <div class="lane__rail" data-rail="c" aria-hidden="true"></div>
+              <div class="lane__cps" data-cps="c" aria-hidden="true"></div>
+            </div>
+            <div class="lane lane--a" data-lane="a" role="img" aria-label="良乡 → 中关村">
+              <div class="lane__rail" data-rail="a" aria-hidden="true"></div>
+              <div class="lane__cps" data-cps="a" aria-hidden="true"></div>
+            </div>
+            <span class="amap-links__live amap-links__live--corridor" id="trafficLiveNote" hidden></span>
           </div>
           <div class="route-corridor" data-corridor="xishan" aria-label="中关村 ⇄ 西山">
             <div class="route-track__bar" aria-hidden="true">
               <span class="route-track__end route-track__end--left">中关村</span>
               <span class="route-track__end route-track__end--right">西山</span>
             </div>
-            <div class="lane lane--e" data-lane="e" role="img" aria-label="西山 → 中关村"></div>
-            <div class="lane lane--d" data-lane="d" role="img" aria-label="中关村 → 西山"></div>
+            <div class="lane lane--e" data-lane="e" role="img" aria-label="西山 → 中关村">
+              <div class="lane__rail" data-rail="e" aria-hidden="true"></div>
+            </div>
+            <div class="lane lane--d" data-lane="d" role="img" aria-label="中关村 → 西山">
+              <div class="lane__rail" data-rail="d" aria-hidden="true"></div>
+            </div>
           </div>
         </div>
         <p class="route-track__empty" id="trackMainEmpty">当前没有班车在运行</p>
@@ -83,7 +91,7 @@
       </div>
 
       <div class="amap-links" aria-label="高德地图实时路线耗时">
-        <span class="amap-links__label">实时路线耗时（跳转高德导航）</span>
+        <span class="amap-links__label">点击按钮跳转高德查看实时路况信息</span>
         <span class="amap-links__live" id="trafficLiveNote" hidden></span>
         <div class="amap-links__btns">
           <a class="btn btn--outline amap-links__btn" href="https://m.amap.com/navigation/carmap/__r=39.72822,116.170248,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA,39.959984,116.315469,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA),,0,0,,,,6QvdxhLLiAo%2FgRQnJ3aO%2BgBic12HK1cGfZQizTLjv8VVCKIi5MrRm%2ByyrZ7JLWaHIvO5NRfmuWy0RTGm4AAfAOWB%2BNxhHajQd3NToeuTn8wWESJbG%2ByC0NjKsqHzqbrd,,,&callapp=0&saddr=116.170248,39.72822,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6%E8%89%AF%E4%B9%A1%E6%A0%A1%E5%8C%BA%E5%8D%97%E6%A0%A1%E5%8C%BA&daddr=116.315469,39.959984,%E5%8C%97%E4%BA%AC%E7%90%86%E5%B7%A5%E5%A4%A7%E5%AD%A6(%E4%B8%AD%E5%85%B3%E6%9D%91%E6%A0%A1%E5%8C%BA)&sort=dist" target="_blank" rel="noopener" title="良乡南校区 → 中关村校区">良乡 → 中关村</a>
@@ -108,8 +116,9 @@
     </section>
 
     <section class="panel" aria-labelledby="upcomingTitle">
-      <div class="panel__head panel__head--upcoming">
+<div class="panel__head panel__head--upcoming">
         <h2 class="panel__title" id="upcomingTitle">即将开行</h2>
+        <button class="btn btn--ghost refresh-btn" id="refreshBtn" type="button" title="刷新余座与实时路况" aria-label="刷新数据">⟳</button>
         <div class="upcoming-controls">
           <div class="date-nav" role="group" aria-label="切换日期">
             <button class="date-nav__btn" id="datePrev" type="button" aria-label="前一天">‹</button>
@@ -188,7 +197,8 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260904-11" type="module"></script></body>
+  <script src="app.js?v=20260904-12" type="module"></script></body>
 </html>
+
 
 
