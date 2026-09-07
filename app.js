@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-14";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-15";
 import {
   formatClock,
   formatHM,
@@ -12,11 +12,12 @@ import {
   checkpointLabel,
   checkpointOffsets,
   tripLocation,
-  campusStopAt
-} from "./lib/schedule.js?v=20260904-14";
-import { now, syncClock } from "./lib/time.js?v=20260904-14";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-14";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-14";
+  campusStopAt,
+  etaDiffMin
+} from "./lib/schedule.js?v=20260904-15";
+import { now, syncClock } from "./lib/time.js?v=20260904-15";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-15";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-15";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -26,8 +27,8 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-14";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-14";
+} from "./lib/availability.js?v=20260904-15";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-15";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -484,20 +485,27 @@ function bindDetailToggle() {
 }
 
 /* ===== Running detail list ===== */
+// 运行详情检查点顺序：fwd 保持数据序（良乡→中关村）；rev 反转成同一方向（京良→杜家坎→六里桥），箭头随方向
+function tripCpList(trip) {
+  const cps = CHECKPOINTS[trip.route] || [];
+  return FWD.has(trip.route) ? cps : [...cps].reverse();
+}
+
 function runningItemHtml(trip, now) {
   const rainbowTag = trip.rainbow ? '<span class="tag">🌈 彩虹班车</span>' : "";
   const elapsed = now - trip.depMs;
   const remaining = trip.arrMs - now;
   const pct = Math.round(trip.progress * 100);
-const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
-  const cpMeta = CHECKPOINTS[trip.route] || [];
+  const cpMeta = tripCpList(trip);
+  const cps = checkpointTimes(trip, cpMeta);
+  const cpArrow = FWD.has(trip.route) ? "→" : "←";
   const cpLine = cps.length
     ? `<div class="running-item__cp" data-role="checkpoints">${cps.map((cp, i) => {
         const passed = now >= cp.ms;
         const meta = cpMeta[i] || {};
         const name = meta.name ? escapeHtml(meta.name) : escapeHtml(cp.label);
         const suffix = meta.note ? `<span class="running-item__cp-suffix">${escapeHtml(meta.note)}</span>` : "";
-        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${name}${suffix}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? '<span class="running-item__cp-arrow">→</span>' : ""}`;
+        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${name}${suffix}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? `<span class="running-item__cp-arrow">${cpArrow}</span>` : ""}`;
       }).join("")}</div>`
     : "";
 return `
@@ -510,7 +518,7 @@ return `
         <span class="running-item__meta"><span data-role="pct">${pct}%</span> · 已行 ${escapeHtml(formatDurationLabel(elapsed))}</span>
       </div>
       <div class="running-item__foot">
-        <span>预计到达 <b>${escapeHtml(formatHM(new Date(trip.arrMs)))}</b></span>
+        <span>预计到达 <b>${escapeHtml(formatHM(new Date(trip.arrMs)))}</b><b class="eta-diff" data-role="eta-diff"></b></span>
         <span data-role="remaining">剩余 ${escapeHtml(formatDurationLabel(remaining))}</span>
       </div>
       ${cpLine}
@@ -551,11 +559,22 @@ function renderRunningList(all, now) {
     if (remEl) remEl.textContent = `剩余 ${formatDurationLabel(remaining)}`;
     const cpEls = li.querySelector('[data-role="checkpoints"]');
     if (cpEls) {
-      const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
+      const cps = checkpointTimes(trip, tripCpList(trip));
       cps.forEach((cp, i) => {
         const item = cpEls.querySelectorAll(".running-item__cp-item")[i];
         if (item) item.classList.toggle("is-passed", now >= cp.ms);
       });
+    }
+    const diffEl = li.querySelector('[data-role="eta-diff"]');
+    if (diffEl) {
+      const diff = etaDiffMin(trip, DURATION_PROFILES);
+      if (diff == null) {
+        diffEl.textContent = "";
+        diffEl.className = "eta-diff";
+      } else {
+        diffEl.textContent = diff > 0 ? `+${diff}` : String(diff);
+        diffEl.className = `eta-diff ${diff > 0 ? "eta-diff--late" : "eta-diff--early"}`;
+      }
     }
   });
 }
@@ -728,15 +747,21 @@ const FIDS_ARROW_L = { c: "←", e: "←" };
 const FIDS_ARROW_R = { a: "→", d: "→" };
 const FIDS_ROUTE_COLOR = { a: "var(--dir-a)", c: "var(--dir-c)", d: "var(--dir-d)", e: "var(--dir-e)" };
 
-function fidsLocText(trip, now) {
-  const loc = tripLocation(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
-  return loc ? loc.text : "—";
+function fidsLocParts(trip, now, checkpoints, campus) {
+  const loc = tripLocation(trip, now, checkpoints, campus);
+  if (!loc) return { main: "—", note: "" };
+  // road 态且带收费站后缀：主文去掉后缀、note 单独渲染（窄屏隐藏）
+  if (loc.kind === "road" && loc.cpNote) {
+    return { main: loc.text.replace(loc.cpNote, ""), note: loc.cpNote };
+  }
+  return { main: loc.text, note: "" };
 }
 
 function fidsRowHtml(trip, now) {
   const st = fidsStatus(trip, now);
   const group = FIDS_ROW_GROUP[st.phase];
   const pct = st.phase === "dep" ? Math.round(trip.progress * 100) : 0;
+  const parts = fidsLocParts(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
   return `
     <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" data-dep="${escapeHtml(trip.dep)}" style="--pct:${pct}%">
       <span class="fids-row__arrow fids-row__arrow--l" aria-hidden="true">${FIDS_ARROW_L[trip.route] || ""}</span>
@@ -745,7 +770,9 @@ function fidsRowHtml(trip, now) {
       <span class="fids-row__dep">${escapeHtml(trip.dep)}</span>
       <span class="fids-row__pct" data-role="fids-pct">—</span>
       <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>
-      <span class="fids-row__loc" data-role="fids-loc">${escapeHtml(fidsLocText(trip, now))}</span>
+      <span class="fids-row__loc" data-role="fids-loc">
+        <span data-role="fids-loc-main">${escapeHtml(parts.main)}</span><span data-role="fids-loc-note">${escapeHtml(parts.note)}</span>
+      </span>
     </div>
   `;
 }
@@ -776,8 +803,11 @@ function renderFids(all, now) {
       el.textContent = st.label;
       el.className = `fids-st ${FIDS_PHASE_CLASS[st.phase]}`;
     }
-    const loc = row.querySelector('[data-role="fids-loc"]');
-    if (loc) loc.textContent = fidsLocText(trip, now);
+    const parts = fidsLocParts(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
+    const locMain = row.querySelector('[data-role="fids-loc-main"]');
+    const locNote = row.querySelector('[data-role="fids-loc-note"]');
+    if (locMain) locMain.textContent = parts.main;
+    if (locNote) locNote.textContent = parts.note;
   });
 }
 
@@ -927,6 +957,7 @@ if (initQQBrowserGuide()) {
 applyView();
 tick();
 setInterval(tick, 1000);
+
 
 
 

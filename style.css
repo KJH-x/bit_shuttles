@@ -537,6 +537,22 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-size: .8rem;
 }
 
+/* 中间站点文字标签（桌面完整，窄屏仅省略「收费站」后缀） */
+.route-track__checkpoint {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--accent-light);
+  color: var(--tag-text);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 2;
+  opacity: .92;
+}
+
 /* Each lane: a thin rounded rail (traffic-band), checkpoint dots, and absolute bus markers.
    Lane itself is transparent and short; the visible line is `.lane__rail` below the markers. */
 .lane {
@@ -557,10 +573,11 @@ section[aria-labelledby="runningTitle"] .panel__head {
   display: none;
 }
 
-/* 圆角细条：位于 marker 下方、route bar 上方的路况线（透明时仅淡淡底框，无实时数据不显示色带） */
+/* 圆角细条：位于 marker 下方、route bar 上方的路况线（透明时仅淡淡底框，无实时数据不显示色带）
+   上下 lane 关于中间 bar 对称：下侧 lane(a/d) 偏上 -10px 靠向 bar，上侧 lane(c/e) 偏下 +10px 靠向 bar */
 .lane__rail {
   position: absolute;
-  top: calc(50% + 8px);
+  top: calc(50% - 10px);
   left: 2px;
   right: 2px;
   transform: translateY(-50%);
@@ -573,10 +590,15 @@ section[aria-labelledby="runningTitle"] .panel__head {
   z-index: 1;
 }
 
-/* 检查点小圆点 node（分段），不附文字；悬停 title 提示名称 */
+.lane--c .lane__rail,
+.lane--e .lane__rail {
+  top: calc(50% + 10px);
+}
+
+/* 检查点小圆点 node（分段），不附文字；悬停 title 提示名称；随 lane 对称偏移 */
 .lane__cps .lane-cp {
   position: absolute;
-  top: calc(50% + 8px);
+  top: calc(50% - 10px);
   width: 9px;
   height: 9px;
   transform: translate(-50%, -50%);
@@ -586,6 +608,11 @@ section[aria-labelledby="runningTitle"] .panel__head {
   box-shadow: 0 0 0 1px var(--track-bound);
   pointer-events: none;
   z-index: 2;
+}
+
+.lane--c .lane__cps .lane-cp,
+.lane--e .lane__cps .lane-cp {
+  top: calc(50% + 10px);
 }
 
 /* bus marker: pill (rounded rect, r=1/2 height) with a direction tip */
@@ -1178,6 +1205,39 @@ section[aria-labelledby="runningTitle"] .panel__head {
     rgba(167, 139, 250, .32));
 }
 
+/* PIDS 静止路况波前：仿主页波纹但无动画，静止跟随 --pct（由 renderFids 每帧更新） */
+.fids-row--run::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 34%;
+  left: var(--pct, 0%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 60%, transparent), transparent);
+  opacity: .30;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fids-row--run[data-route="a"]::after {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 60%, transparent), transparent);
+}
+
+/* rev（c/e，中关村/西山发车）：波前在右，从右向左渐隐 */
+.fids-row--run[data-route="c"]::after,
+.fids-row--run[data-route="e"]::after {
+  left: auto;
+  right: var(--pct);
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-c) 60%, transparent), transparent);
+}
+
+.fids-row--run[data-route="d"]::after {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-d) 60%, transparent), transparent);
+}
+
+.fids-row--run[data-route="e"]::after {
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-e) 60%, transparent), transparent);
+}
+
 .fids-row > * {
   position: relative;
   z-index: 1;
@@ -1223,6 +1283,21 @@ section[aria-labelledby="runningTitle"] .panel__head {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* PIDS 预计到达偏差标记：late 红（比理想慢）/ early 绿（比理想快） */
+.eta-diff {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-left: 4px;
+}
+
+.eta-diff--late {
+  color: var(--danger);
+}
+
+.eta-diff--early {
+  color: var(--success);
 }
 
 .fids-st {
@@ -1723,6 +1798,16 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
   /* 运行详情检查点窄屏：省略「收费站」后缀（与顶部进度条一致） */
   .running-item__cp-suffix {
+    display: none;
+  }
+
+  /* 运行图检查点窄屏：省略「收费站」后缀，保留站点名 */
+  .checkpoint-suffix {
+    display: none;
+  }
+
+  /* PIDS 位置列窄屏：省略「收费站」备注，保留「距京良 约 12 分钟」主文本 */
+  .fids-row__loc [data-role="fids-loc-note"] {
     display: none;
   }
 }

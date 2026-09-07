@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ROUTES, TRIPS, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "../schedule-data.js";
-import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, departureLabel, fidsStatus, checkpointOffsets, checkpointLabel, checkpointTimes, campusStopAt, arrivalStopAt, tripLocation } from "../lib/schedule.js";
+import { tripStatus, computeAll, tripDuration, depToMs, formatDurationLabel, formatClock, formatHM, formatHMS, ticketInfo, lookupDuration, etaDiffMin, departureLabel, fidsStatus, checkpointOffsets, checkpointLabel, checkpointTimes, campusStopAt, arrivalStopAt, tripLocation } from "../lib/schedule.js";
 
 const ROUTE_IDS = new Set(ROUTES.map((r) => r.id));
 
@@ -307,6 +307,38 @@ test("tripLocation: 校内 / 路上距下一站 / 已到达（停站推进）", 
   const arr2 = tripLocation(trip, trip.arrMs + 15 * 60000, CHECKPOINTS.a, CAMPUS.a);
   assert.equal(arr2.kind, "arrived");
   assert.match(arr2.text, /西门/);
+});
+
+test("tripLocation: road 分支拆分检查点 cpName/cpNote（收费站后缀）", () => {
+  const depMs = depToMs("12:00", new Date("2026-09-01T10:00:00+08:00"));
+  const trip = { id: "g", route: "a", dep: "12:00", price: "¥10.00", rainbow: false, depMs, arrMs: depMs + 60 * 60000 };
+  // T+10：下一站为京良收费站（0.254×60=15.24min），cpName/cpNote 拆分出来
+  const road = tripLocation(trip, depMs + 10 * 60000, CHECKPOINTS.a, CAMPUS.a);
+  assert.equal(road.kind, "road");
+  assert.equal(road.cpName, "京良");
+  assert.equal(road.cpNote, "收费站");
+  assert.match(road.text, /^距京良收费站/);
+  // 无 note 的检查点（六里桥）cpNote 为 null
+  const noNote = tripLocation(trip, depMs + 30 * 60000, CHECKPOINTS.a, CAMPUS.a);
+  assert.equal(noNote.kind, "road");
+  assert.equal(noNote.cpName, "六里桥");
+  assert.equal(noNote.cpNote, null);
+  // 校内态不携带 cpName/cpNote
+  const campus = tripLocation(trip, depMs - 5 * 60000, CHECKPOINTS.a, CAMPUS.a);
+  assert.equal(campus.cpName, undefined);
+  assert.equal(campus.cpNote, undefined);
+});
+
+test("etaDiffMin: 实时 ETA 与静态理想插值偏差 |diff|>3 才返回", () => {
+  const trip = { id: "x", route: "c", dep: "12:00" }; // 理想 = lookupDuration("12:00", profiles.c) = 52
+  assert.equal(etaDiffMin({ ...trip, dur: 52 }, DURATION_PROFILES), null); // 恰为静态值 52，差 0
+  assert.equal(etaDiffMin({ ...trip, dur: 55 }, DURATION_PROFILES), null); // +3 不显示
+  assert.equal(etaDiffMin({ ...trip, dur: 49 }, DURATION_PROFILES), null); // -3 不显示
+  assert.equal(etaDiffMin({ ...trip, dur: 57 }, DURATION_PROFILES), 5);    // +5 晚到
+  assert.equal(etaDiffMin({ ...trip, dur: 48 }, DURATION_PROFILES), -4);   // -4 早到
+  assert.equal(etaDiffMin(trip, DURATION_PROFILES), null);                 // dur 缺失
+  assert.equal(etaDiffMin({ ...trip, dur: 60 }, undefined), null);         // 无 profile
+  assert.equal(etaDiffMin({ ...trip, dur: 60 }, {}), null);                // profile 无该 route
 });
 
 test("fidsStatus: 等待发车 / 催促上车 / 已出发 / 已到达 四态", () => {
