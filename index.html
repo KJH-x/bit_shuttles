@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260904-15">
+  <link rel="stylesheet" href="style.css?v=20260904-16">
 </head>
 <body>
   <a href="#view-main" class="skip-link">跳转到主内容</a>
@@ -37,14 +37,17 @@
     <section class="toolbar" aria-label="工具栏">
       <div class="toolbar__status" id="nextStatus" role="status" aria-live="polite">加载中…</div>
       <span class="traffic-badge" id="trafficBadge" hidden></span>
-      <label for="themeSelect" class="theme-label">
-        <span>主题</span>
-        <select id="themeSelect">
-          <option value="system">跟随系统</option>
-          <option value="light">浅色</option>
-          <option value="dark">深色</option>
-        </select>
-      </label>
+      <div class="toolbar__actions">
+        <button class="btn btn--ghost reminder-btn" id="reminderBtn" type="button" title="设置提醒" aria-haspopup="dialog">🔔 设置提醒</button>
+        <label for="themeSelect" class="theme-label">
+          <span>主题</span>
+          <select id="themeSelect">
+            <option value="system">跟随系统</option>
+            <option value="light">浅色</option>
+            <option value="dark">深色</option>
+          </select>
+        </label>
+      </div>
     </section>
     <section class="panel" aria-labelledby="runningTitle">
       <div class="panel__head">
@@ -193,13 +196,54 @@
     </section>
   </main>
 
+  <!-- 抢票提醒：引导弹窗（点击班次触发；仅 PWA 给完整选项，非 PWA 走日历） -->
+  <div class="reminder-overlay" id="reminderGuide" hidden>
+    <div class="reminder-dialog" role="dialog" aria-modal="true" aria-labelledby="reminderGuideTitle">
+      <h3 id="reminderGuideTitle">添加抢票提醒</h3>
+      <p id="reminderGuideText">你刚刚触发了「添加抢票提醒功能」，是否要保留此功能？</p>
+      <div class="reminder-dialog__actions">
+        <button class="btn btn--outline" id="reminderGuideYes" type="button">是，我需要</button>
+        <button class="btn btn--ghost" id="reminderGuideNo" type="button">否</button>
+      </div>
+      <div class="reminder-dialog__methods" id="reminderGuideMethods" hidden>
+        <button class="reminder-method" data-method="calendar" type="button">📅 添加到日历</button>
+        <button class="reminder-method" data-method="pwa" type="button">🔔 PWA 提醒</button>
+        <button class="reminder-method" data-method="both" type="button">📅+🔔 两者都要</button>
+      </div>
+      <p class="reminder-dialog__hint" id="reminderGuideHint"></p>
+    </div>
+  </div>
+
+  <!-- 设置提醒面板（顶部 🔔 按钮打开） -->
+  <div class="reminder-overlay" id="reminderSettings" hidden>
+    <div class="reminder-dialog" role="dialog" aria-modal="true" aria-labelledby="reminderSettingsTitle">
+      <h3 id="reminderSettingsTitle">设置提醒</h3>
+      <label class="reminder-switch">
+        <input type="checkbox" id="reminderEnabled">
+        <span>启用抢票提醒</span>
+      </label>
+      <label class="reminder-switch" id="reminderCalendarWrap">
+        <input type="checkbox" id="reminderCalendar">
+        <span>添加到日历</span>
+      </label>
+      <label class="reminder-switch" id="reminderPwaWrap">
+        <input type="checkbox" id="reminderPwa">
+        <span>PWA 提醒</span>
+      </label>
+      <p class="reminder-dialog__hint" id="reminderSettingsHint"></p>
+      <div class="reminder-dialog__actions">
+        <button class="btn btn--outline" id="reminderSettingsClose" type="button">完成</button>
+      </div>
+    </div>
+  </div>
+
   <noscript>
     <div style="text-align:center;padding:2rem">
       <p>请启用 JavaScript 以查看实时班车进度。</p>
     </div>
   </noscript>
 
-  <script src="app.js?v=20260904-15" type="module"></script></body>
+  <script src="app.js?v=20260904-16" type="module"></script></body>
 </html>
 
 

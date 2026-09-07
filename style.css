@@ -295,6 +295,114 @@ a:hover {
   font-weight: 700;
 }
 
+.toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* 轻量幽灵按钮（设置提醒等） */
+.btn--ghost {
+  background: transparent;
+  color: var(--primary);
+  border: 1.5px solid var(--border);
+}
+.btn--ghost:hover {
+  border-color: var(--primary);
+  background: var(--accent-light);
+}
+
+/* ===== 抢票提醒：弹窗（引导 + 设置） ===== */
+.reminder-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .42);
+  padding: 20px;
+}
+.reminder-dialog {
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px 20px;
+  box-shadow: var(--shadow);
+}
+.reminder-dialog h3 {
+  font-size: 1.05rem;
+  margin-bottom: 10px;
+}
+.reminder-dialog p {
+  font-size: .88rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.reminder-dialog__hint {
+  margin-top: 12px;
+  font-size: .78rem;
+}
+.reminder-dialog__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.reminder-dialog__methods {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.reminder-method {
+  text-align: left;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: .92rem;
+  font-weight: 600;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.reminder-method:hover {
+  border-color: var(--primary);
+  background: var(--accent-light);
+}
+.reminder-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: .92rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+}
+.reminder-switch:first-of-type {
+  border-top: 0;
+}
+.reminder-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+.reminder-switch.is-disabled {
+  opacity: .4;
+  pointer-events: none;
+}
+.reminder-switch .reminder-switch__why {
+  font-size: .74rem;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: auto;
+}
+
 /* ===== 今日客流对比徽标（红/绿 上下箭头） ===== */
 .traffic-badge {
   display: inline-flex;
