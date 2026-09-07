@@ -441,14 +441,18 @@ a:hover {
   pointer-events: none;
 }
 
-/* 已设置抢票提醒的班次：时间+班次金黄高亮（日期+班次限定） */
+/* 已设置抢票提醒的班次：给时间加明显金黄色圆角矩形背景（日期+班次限定） */
 .trip-item--reminded .trip-item__time {
-  color: #d97706;
-  text-shadow: 0 0 0 transparent;
+  color: #fff;
+  background: #d97706;
+  padding: 2px 10px;
+  border-radius: 999px;
+  min-width: 64px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(217, 119, 6, .35);
 }
 .trip-item--reminded {
   border-color: color-mix(in srgb, #d97706 55%, transparent);
-  background: color-mix(in srgb, #fef3c7 45%, var(--surface));
 }
 
 /* ===== 今日客流对比徽标（红/绿 上下箭头） ===== */

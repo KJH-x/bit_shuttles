@@ -46,6 +46,7 @@ import {
   dismissIcsHint,
   openDingTalk,
   buildReminderIcs,
+  buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
 } from "./lib/reminder.js?v=20260904-17";
@@ -1014,14 +1015,23 @@ function showReminderMethods() {
   dom.reminderGuideMethods.hidden = false;
 }
 
+// 生成 ICS 与导出文件名（班车.MMDD.HHMM.<hash4>.ics）
+function icsFor(trip, dateStr) {
+  const routeLabel = ROUTE_LABEL[trip.route];
+  return {
+    ics: buildReminderIcs({ routeLabel, dep: trip.dep, dateStr }),
+    filename: buildReminderFilename({ dateStr, dep: trip.dep })
+  };
+}
+
 // 执行提醒：calendar/both → ICS（非 iOS Safari 下载后弹打开日历提示）；pwa/both → PWA 通知
 async function applyReminder(trip, method, dateStr) {
-  const routeLabel = ROUTE_LABEL[trip.route];
   const effective = method === "both" || method === "pwa" || method === "calendar" ? method : "calendar";
   let message = "";
   try {
     if (effective === "calendar" || effective === "both") {
-      downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep, dateStr }));
+      const { ics, filename } = icsFor(trip, dateStr);
+      downloadIcs(ics, filename);
       setReminder(dateStr, trip.route, trip.dep, effective === "both" ? "both" : "calendar");
       message = "已添加到日历（开售前 3 分钟提醒）";
       if (!isIosSafari() && !icsHintDismissed()) {
@@ -1032,17 +1042,19 @@ async function applyReminder(trip, method, dateStr) {
       if (isPwa()) {
         const granted = await ensureNotificationPermission();
         if (granted) {
-          schedulePwaNotify({ routeLabel, dep: trip.dep, dateStr, offsetMin: DEFAULT_OFFSET_MIN });
+          schedulePwaNotify({ routeLabel: ROUTE_LABEL[trip.route], dep: trip.dep, dateStr, offsetMin: DEFAULT_OFFSET_MIN });
           setReminder(dateStr, trip.route, trip.dep, "pwa");
           message = "已设置 PWA 提醒（开售前 3 分钟通知）";
         } else {
-          downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep, dateStr }));
+          const { ics, filename } = icsFor(trip, dateStr);
+          downloadIcs(ics, filename);
           setReminder(dateStr, trip.route, trip.dep, "calendar");
           message = "通知权限被拒绝，已回退为添加到日历";
           if (!isIosSafari() && !icsHintDismissed()) showIcsHint();
         }
       } else {
-        downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep, dateStr }));
+        const { ics, filename } = icsFor(trip, dateStr);
+        downloadIcs(ics, filename);
         setReminder(dateStr, trip.route, trip.dep, "calendar");
         message = "需安装到主屏幕才支持 PWA 提醒，已回退为添加到日历";
         if (!isIosSafari() && !icsHintDismissed()) showIcsHint();

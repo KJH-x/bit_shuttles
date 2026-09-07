@@ -39,7 +39,8 @@ const {
   icsHintDismissed,
   dismissIcsHint,
   depDateOn,
-  buildReminderIcs
+  buildReminderIcs,
+  buildReminderFilename
 } = await import("../lib/reminder.js");
 
 function parseIcsUtc(s) {
@@ -198,4 +199,21 @@ test("isPwa / notificationSupported / notificationGranted: 能力判定", () => 
 
   globalThis.Notification = { permission: "denied" };
   assert.equal(notificationGranted(), false);
+});
+
+test("buildReminderFilename: 班车.MMDD.HHMM.<时间戳hash末4>.ics 格式", () => {
+  const f = buildReminderFilename({ dateStr: "2026-09-08", dep: "07:30", now: 1788800000000 });
+  assert.match(f, /^班车\.0908\.0730\.[0-9a-f]{4}\.ics$/);
+  // hash 末 4 位 = 16 进制
+  const tail = f.slice(8, 12);
+  assert.match(tail, /^[0-9a-f]{4}$/);
+  // 不同 now → 文件名不同（不冲突）
+  const f2 = buildReminderFilename({ dateStr: "2026-09-08", dep: "07:30", now: 1788800000001 });
+  assert.notEqual(f, f2);
+  // 同 now 同班次 → 一致（幂等）
+  const f3 = buildReminderFilename({ dateStr: "2026-09-08", dep: "07:30", now: 1788800000000 });
+  assert.equal(f, f3);
+  // 跨月补零
+  const fJan = buildReminderFilename({ dateStr: "2026-01-05", dep: "09:05", now: 1788800000000 });
+  assert.match(fJan, /^班车\.0105\.0905\./);
 });
