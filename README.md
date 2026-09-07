@@ -38,6 +38,7 @@
 - **数据源界面（勿重复探测）**：BIT 班车预约源站 = `hqapp1.bit.edu.cn`（**仅 http 可达，本机外网 https 直连被拒**）。API 端点：`/vehicle/get-list`、`/vehicle/get-reserved-seats`（见 `functions/_shared/school.js`）。**班次列表用户界面 URL = `http://hqapp1.bit.edu.cn/newbanche/home`**（200，供钉钉跳转/深链使用）。源站无其他 Web UI（`/` 返回纯文本「欢迎访问系统」，`/h5/ /wap/ /vehicle/` 等均 404），仅 API + 客户端界面。
 - **可作为 App 安装（PWA）**：`manifest.webmanifest` 达标（standalone / 图标 / 主题色），浏览器「安装应用」即可添加到桌面。
 - **iOS Safari 安装引导**：iOS 非 PWA 模式打开时，完全加载 5 秒后弹出自定义引导（长按地址栏 → 分享 → 添加到主屏幕，默认作为网页 App 打开）；「知道了」后不再打扰（`localStorage`）。
+- **抢票提醒（v1.24）**：点击班次卡片设置/取消提醒——**只询问 1 次**并记住默认方式（`bitbus-reminder-pref`），之后点击按默认方式直接设置；已设置提醒的班次显示**金黄高亮**（日期+班次限定，`bitbus-reminders` 每班次独立、可多选、读取时自动清理过期条目管理生命周期）；方式：**添加到日历**（生成含 VALARM 的 .ics，iOS Safari 原生「添加到日历」、其他平台下载后弹「通过日历打开」提示且可「不再提醒」）/ **PWA 提醒**（需装到主屏幕；到点 Notification，点击打开钉钉 `http://hqapp1.bit.edu.cn/newbanche/home`）/ 两者都要；**非 PWA 不显示 PWA 选项**；顶部 🔔「设置提醒」面板可切换默认方式（非 PWA 时 PWA 项灰显）。提醒时刻 = 开售（发车前 60 分钟）− 3 分钟。
 - **可切换二号屏 PIDS（`#/PIDS`）**：顶部「标准屏 / PIDS」一键切换（hash 路由，兼容直接输入 `/#/PIDS`）；全车次一行一趟、紧凑排列，绿色方向箭头 + 目的地圆点 + 方向/开点/状态/位置（等待发车/催促上车/已出发/已到达，文字四色区分；底色区分未发车/运行中/已到达）。
 - **西山线路默认隐藏（开关 `ENABLE_XISHAN`）**：往返西山（中关村⇄西山，route d/e）的全部班次在 `schedule-data.js` 中通过 `ENABLE_XISHAN=false` 默认过滤，运行图/即将开行/PIDS 均不展示。**在明确要求启用之前不得展示**；启用时将开关改为 `true` 并按发版清单 bump 版本号。
 - **虚拟站点（checkpoint）**：良乡⇄中关村 途经 京良收费站 → 杜家坎收费站 → 六里桥（无实际停靠），直接嵌入运行图中间轨道条（双向时间加权定位：京良 25.4% / 杜家坎 41.4% / 六里桥 62.3%）；「正在运行」列表与 PIDS 均展示位置信息。

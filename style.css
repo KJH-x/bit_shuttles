@@ -403,6 +403,54 @@ a:hover {
   margin-left: auto;
 }
 
+.reminder-dialog__label {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin: 10px 0 4px;
+}
+.reminder-methods-radio {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.reminder-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: .92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.reminder-radio:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--accent-light);
+}
+.reminder-radio input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary);
+}
+.reminder-radio.is-disabled {
+  opacity: .4;
+  pointer-events: none;
+}
+
+/* 已设置抢票提醒的班次：时间+班次金黄高亮（日期+班次限定） */
+.trip-item--reminded .trip-item__time {
+  color: #d97706;
+  text-shadow: 0 0 0 transparent;
+}
+.trip-item--reminded {
+  border-color: color-mix(in srgb, #d97706 55%, transparent);
+  background: color-mix(in srgb, #fef3c7 45%, var(--surface));
+}
+
 /* ===== 今日客流对比徽标（红/绿 上下箭头） ===== */
 .traffic-badge {
   display: inline-flex;

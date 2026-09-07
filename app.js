@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-16";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-17";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260904-16";
-import { now, syncClock } from "./lib/time.js?v=20260904-16";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-16";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-16";
+} from "./lib/schedule.js?v=20260904-17";
+import { now, syncClock } from "./lib/time.js?v=20260904-17";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-17";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-17";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -27,21 +27,28 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-16";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-16";
+} from "./lib/availability.js?v=20260904-17";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-17";
 import {
-  readSettings,
-  saveSettings,
+  readPref,
+  savePref,
+  readReminders,
+  hasReminder,
+  setReminder,
+  unsetReminder,
+  reminderMethodOf,
   isPwa,
+  isIosSafari,
   notificationSupported,
   notificationGranted,
   ensureNotificationPermission,
+  icsHintDismissed,
+  dismissIcsHint,
   openDingTalk,
   buildReminderIcs,
   downloadIcs,
-  schedulePwaNotify,
-  DEFAULT_OFFSET_MIN
-} from "./lib/reminder.js?v=20260904-16";
+  schedulePwaNotify
+} from "./lib/reminder.js?v=20260904-17";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -81,15 +88,22 @@ const dom = {
   reminderGuideYes: document.getElementById("reminderGuideYes"),
   reminderGuideNo: document.getElementById("reminderGuideNo"),
   reminderGuideMethods: document.getElementById("reminderGuideMethods"),
+  reminderGuideMethodPwa: document.getElementById("reminderGuideMethodPwa"),
+  reminderGuideMethodBoth: document.getElementById("reminderGuideMethodBoth"),
   reminderGuideText: document.getElementById("reminderGuideText"),
   reminderGuideHint: document.getElementById("reminderGuideHint"),
   reminderSettings: document.getElementById("reminderSettings"),
   reminderEnabled: document.getElementById("reminderEnabled"),
-  reminderCalendar: document.getElementById("reminderCalendar"),
-  reminderPwa: document.getElementById("reminderPwa"),
-  reminderCalendarWrap: document.getElementById("reminderCalendarWrap"),
-  reminderPwaWrap: document.getElementById("reminderPwaWrap"),
+  reminderMethodGroup: document.getElementById("reminderMethodGroup"),
+  reminderMethodCalendar: document.getElementById("reminderMethodCalendar"),
+  reminderMethodPwa: document.getElementById("reminderMethodPwa"),
+  reminderMethodBoth: document.getElementById("reminderMethodBoth"),
+  reminderMethodPwaWrap: document.getElementById("reminderMethodPwaWrap"),
+  reminderMethodBothWrap: document.getElementById("reminderMethodBothWrap"),
   reminderSettingsHint: document.getElementById("reminderSettingsHint"),
+  reminderIcsHint: document.getElementById("reminderIcsHint"),
+  reminderIcsHintDismiss: document.getElementById("reminderIcsHintDismiss"),
+  reminderIcsHintClose: document.getElementById("reminderIcsHintClose"),
   reminderSettingsClose: document.getElementById("reminderSettingsClose"),
   fidsBody: document.getElementById("fidsBody"),
   tripColumnA: document.getElementById("tripColumnA"),
@@ -690,6 +704,8 @@ function renderList(ul, list, now, highlightNext) {
     const trip = list.find((t) => t.id === li.dataset.id);
     if (!trip) return;
     updateTripAvail(li, trip);
+    // 已设置抢票提醒的班次金黄高亮（日期+班次限定）
+    li.classList.toggle("trip-item--reminded", hasReminder(viewDateStr(), trip.route, trip.dep));
     const cd = li.querySelector('[data-role="countdown"]');
     if (cd) {
       if (now < trip.depMs) {
@@ -979,51 +995,57 @@ function closeReminderGuide(delayMs) {
 }
 
 function promptReminder(trip) {
-  const s = readSettings();
-  if (localStorage.getItem("bitbus-reminder-dismissed") === "1" && s.enabled === false) return;
   pendingReminderTrip = trip;
   dom.reminderGuideText.textContent = "你刚刚触发了「添加抢票提醒功能」，是否要保留此功能？";
   dom.reminderGuideYes.hidden = false;
   dom.reminderGuideNo.hidden = false;
   dom.reminderGuideHint.textContent = "";
-  const pwa = isPwa();
-  dom.reminderGuideMethods.hidden = !pwa;
-  if (!pwa) {
-    dom.reminderGuideHint.textContent = "当前未安装为 PWA，可用「添加到日历」；安装到主屏幕后支持 PWA 提醒";
-  }
   dom.reminderGuide.hidden = false;
 }
 
-async function applyReminder(trip, method) {
+// 首次引导「是」→ 显示方式选择；非 PWA 隐藏 PWA/两者选项
+function showReminderMethods() {
+  const pwa = isPwa();
+  dom.reminderGuideYes.hidden = true;
+  dom.reminderGuideNo.hidden = true;
+  dom.reminderGuideHint.textContent = "";
+  if (dom.reminderGuideMethodPwa) dom.reminderGuideMethodPwa.hidden = !pwa;
+  if (dom.reminderGuideMethodBoth) dom.reminderGuideMethodBoth.hidden = !pwa;
+  dom.reminderGuideMethods.hidden = false;
+}
+
+// 执行提醒：calendar/both → ICS（非 iOS Safari 下载后弹打开日历提示）；pwa/both → PWA 通知
+async function applyReminder(trip, method, dateStr) {
   const routeLabel = ROUTE_LABEL[trip.route];
-  const settings = readSettings();
+  const effective = method === "both" || method === "pwa" || method === "calendar" ? method : "calendar";
   let message = "";
   try {
-    if (method === "calendar" || method === "both") {
-      downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep }));
-      saveSettings({ enabled: true, calendar: true, pwa: settings.pwa });
+    if (effective === "calendar" || effective === "both") {
+      downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep, dateStr }));
+      setReminder(dateStr, trip.route, trip.dep, effective === "both" ? "both" : "calendar");
       message = "已添加到日历（开售前 3 分钟提醒）";
+      if (!isIosSafari() && !icsHintDismissed()) {
+        showIcsHint();
+      }
     }
-    if (method === "pwa" || method === "both") {
+    if (effective === "pwa" || effective === "both") {
       if (isPwa()) {
         const granted = await ensureNotificationPermission();
         if (granted) {
-          schedulePwaNotify({ routeLabel, dep: trip.dep, offsetMin: DEFAULT_OFFSET_MIN });
-          saveSettings({
-            enabled: true,
-            calendar: method === "both" ? true : settings.calendar,
-            pwa: true
-          });
+          schedulePwaNotify({ routeLabel, dep: trip.dep, dateStr, offsetMin: DEFAULT_OFFSET_MIN });
+          setReminder(dateStr, trip.route, trip.dep, "pwa");
           message = "已设置 PWA 提醒（开售前 3 分钟通知）";
         } else {
-          downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep }));
-          saveSettings({ enabled: true, calendar: true, pwa: false });
+          downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep, dateStr }));
+          setReminder(dateStr, trip.route, trip.dep, "calendar");
           message = "通知权限被拒绝，已回退为添加到日历";
+          if (!isIosSafari() && !icsHintDismissed()) showIcsHint();
         }
       } else {
-        downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep }));
-        saveSettings({ enabled: true, calendar: true, pwa: false });
+        downloadIcs(buildReminderIcs({ routeLabel, dep: trip.dep, dateStr }));
+        setReminder(dateStr, trip.route, trip.dep, "calendar");
         message = "需安装到主屏幕才支持 PWA 提醒，已回退为添加到日历";
+        if (!isIosSafari() && !icsHintDismissed()) showIcsHint();
       }
     }
   } catch (err) {
@@ -1033,17 +1055,54 @@ async function applyReminder(trip, method) {
   dom.reminderGuideMethods.hidden = true;
   dom.reminderGuideHint.textContent = message;
   closeReminderGuide(1600);
+  state.upcomingSig = "";
+  tick();
+}
+
+// 非 iOS Safari：.ics 下载后弹「通过日历打开」提示
+function showIcsHint() {
+  dom.reminderIcsHint.hidden = false;
+}
+function closeIcsHint() {
+  dom.reminderIcsHint.hidden = true;
+}
+
+// 点击班次：已设→取消（金黄移除）；未设→按默认方式设置（首次先问）
+function handleTripReminderClick(trip, dateStr) {
+  const already = hasReminder(dateStr, trip.route, trip.dep);
+  if (already) {
+    unsetReminder(dateStr, trip.route, trip.dep);
+    dom.reminderGuideText.textContent = "已取消该班次的抢票提醒。";
+    dom.reminderGuideYes.hidden = true;
+    dom.reminderGuideNo.hidden = true;
+    dom.reminderGuideMethods.hidden = true;
+    dom.reminderGuideHint.textContent = "";
+    dom.reminderGuide.hidden = false;
+    closeReminderGuide(1400);
+    state.upcomingSig = "";
+    tick();
+    return;
+  }
+  const pref = readPref();
+  if (!pref.askedOnce) {
+    promptReminder(trip);
+    return;
+  }
+  // 只问一次后：按默认方式直接设置
+  applyReminder(trip, pref.method, dateStr);
 }
 
 function renderReminderSettings() {
-  const s = readSettings();
-  dom.reminderEnabled.checked = s.enabled;
-  dom.reminderCalendar.checked = s.calendar;
-  dom.reminderPwa.checked = s.pwa;
+  const pref = readPref();
+  dom.reminderEnabled.checked = pref.askedOnce;
+  dom.reminderMethodCalendar.checked = pref.method === "calendar";
+  dom.reminderMethodPwa.checked = pref.method === "pwa";
+  dom.reminderMethodBoth.checked = pref.method === "both";
   const pwa = isPwa();
-  dom.reminderPwa.disabled = !pwa;
-  dom.reminderPwaWrap.classList.toggle("is-disabled", !s.enabled || !pwa);
-  dom.reminderCalendarWrap.classList.toggle("is-disabled", !s.enabled);
+  dom.reminderMethodPwa.disabled = !pwa;
+  dom.reminderMethodBoth.disabled = !pwa;
+  dom.reminderMethodPwaWrap.classList.toggle("is-disabled", !pwa);
+  dom.reminderMethodBothWrap.classList.toggle("is-disabled", !pwa);
   dom.reminderSettingsHint.textContent = pwa ? "" : "未安装为 PWA，PWA 提醒不可用";
 }
 
@@ -1054,20 +1113,14 @@ function bindTripReminder() {
     const li = e.target.closest("li.trip-item");
     if (!li) return;
     if (e.target.closest("a, button, .trip-item__avail")) return;
-    promptReminder({ route: li.dataset.route, dep: li.dataset.dep });
+    handleTripReminderClick({ route: li.dataset.route, dep: li.dataset.dep }, viewDateStr());
   });
 }
 
 function bindReminderGuide() {
-  dom.reminderGuideYes.addEventListener("click", () => {
-    dom.reminderGuideYes.hidden = true;
-    dom.reminderGuideNo.hidden = true;
-    dom.reminderGuideHint.textContent = "";
-    dom.reminderGuideMethods.hidden = false;
-  });
+  dom.reminderGuideYes.addEventListener("click", () => showReminderMethods());
   dom.reminderGuideNo.addEventListener("click", () => {
-    localStorage.setItem("bitbus-reminder-dismissed", "1");
-    saveSettings({ enabled: false, calendar: true, pwa: true });
+    savePref({ askedOnce: false, method: readPref().method });
     dom.reminderGuideYes.hidden = false;
     dom.reminderGuideNo.hidden = false;
     dom.reminderGuideHint.textContent = "已关闭；可在顶部 🔔 设置提醒中重新开启";
@@ -1076,7 +1129,9 @@ function bindReminderGuide() {
   dom.reminderGuideMethods.addEventListener("click", (e) => {
     const btn = e.target.closest(".reminder-method");
     if (!btn || !pendingReminderTrip) return;
-    applyReminder(pendingReminderTrip, btn.dataset.method);
+    const method = btn.dataset.method;
+    savePref({ askedOnce: true, method });
+    applyReminder(pendingReminderTrip, method, viewDateStr());
   });
 }
 
@@ -1089,20 +1144,29 @@ function bindReminderSettings() {
     dom.reminderSettings.hidden = true;
   });
   const persist = () => {
-    saveSettings({
-      enabled: dom.reminderEnabled.checked,
-      calendar: dom.reminderCalendar.checked,
-      pwa: dom.reminderPwa.checked
-    });
+    const method = dom.reminderMethodPwa.checked && isPwa() ? "pwa"
+      : dom.reminderMethodBoth.checked && isPwa() ? "both"
+      : dom.reminderMethodCalendar.checked ? "calendar"
+      : "calendar";
+    savePref({ askedOnce: dom.reminderEnabled.checked, method });
     renderReminderSettings();
   };
   dom.reminderEnabled.addEventListener("change", persist);
-  dom.reminderCalendar.addEventListener("change", persist);
-  dom.reminderPwa.addEventListener("change", persist);
+  for (const r of [dom.reminderMethodCalendar, dom.reminderMethodPwa, dom.reminderMethodBoth]) {
+    r.addEventListener("change", persist);
+  }
+}
+
+function bindReminderIcsHint() {
+  dom.reminderIcsHintDismiss.addEventListener("click", () => {
+    dismissIcsHint();
+    closeIcsHint();
+  });
+  dom.reminderIcsHintClose.addEventListener("click", () => closeIcsHint());
 }
 
 function bindReminderOverlay() {
-  for (const overlay of [dom.reminderGuide, dom.reminderSettings]) {
+  for (const overlay of [dom.reminderGuide, dom.reminderSettings, dom.reminderIcsHint]) {
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) overlay.hidden = true;
     });
@@ -1111,6 +1175,7 @@ function bindReminderOverlay() {
     if (e.key !== "Escape") return;
     if (!dom.reminderGuide.hidden) dom.reminderGuide.hidden = true;
     if (!dom.reminderSettings.hidden) dom.reminderSettings.hidden = true;
+    if (!dom.reminderIcsHint.hidden) dom.reminderIcsHint.hidden = true;
   });
 }
 
@@ -1126,6 +1191,7 @@ bindRefreshBtn();
 bindTripReminder();
 bindReminderGuide();
 bindReminderSettings();
+bindReminderIcsHint();
 bindReminderOverlay();
 initAvailBridge();
 initTraffic((data) => {
@@ -1149,6 +1215,7 @@ if (initQQBrowserGuide()) {
 applyView();
 tick();
 setInterval(tick, 1000);
+
 
 
 

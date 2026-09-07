@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260904-16">
+  <link rel="stylesheet" href="style.css?v=20260904-17">
 </head>
 <body>
   <a href="#view-main" class="skip-link">跳转到主内容</a>
@@ -196,7 +196,7 @@
     </section>
   </main>
 
-  <!-- 抢票提醒：引导弹窗（点击班次触发；仅 PWA 给完整选项，非 PWA 走日历） -->
+  <!-- 抢票提醒：引导弹窗（仅首次询问 1 次；非 PWA 隐藏 PWA 选项） -->
   <div class="reminder-overlay" id="reminderGuide" hidden>
     <div class="reminder-dialog" role="dialog" aria-modal="true" aria-labelledby="reminderGuideTitle">
       <h3 id="reminderGuideTitle">添加抢票提醒</h3>
@@ -207,14 +207,14 @@
       </div>
       <div class="reminder-dialog__methods" id="reminderGuideMethods" hidden>
         <button class="reminder-method" data-method="calendar" type="button">📅 添加到日历</button>
-        <button class="reminder-method" data-method="pwa" type="button">🔔 PWA 提醒</button>
-        <button class="reminder-method" data-method="both" type="button">📅+🔔 两者都要</button>
+        <button class="reminder-method" data-method="pwa" type="button" id="reminderGuideMethodPwa">🔔 PWA 提醒</button>
+        <button class="reminder-method" data-method="both" type="button" id="reminderGuideMethodBoth">📅+🔔 两者都要</button>
       </div>
       <p class="reminder-dialog__hint" id="reminderGuideHint"></p>
     </div>
   </div>
 
-  <!-- 设置提醒面板（顶部 🔔 按钮打开） -->
+  <!-- 设置提醒面板（顶部 🔔 按钮打开）：默认提醒方式（非 PWA 灰显 PWA） -->
   <div class="reminder-overlay" id="reminderSettings" hidden>
     <div class="reminder-dialog" role="dialog" aria-modal="true" aria-labelledby="reminderSettingsTitle">
       <h3 id="reminderSettingsTitle">设置提醒</h3>
@@ -222,17 +222,36 @@
         <input type="checkbox" id="reminderEnabled">
         <span>启用抢票提醒</span>
       </label>
-      <label class="reminder-switch" id="reminderCalendarWrap">
-        <input type="checkbox" id="reminderCalendar">
-        <span>添加到日历</span>
-      </label>
-      <label class="reminder-switch" id="reminderPwaWrap">
-        <input type="checkbox" id="reminderPwa">
-        <span>PWA 提醒</span>
-      </label>
+      <p class="reminder-dialog__label">默认提醒方式（点击班次即按此设置）</p>
+      <div class="reminder-methods-radio" id="reminderMethodGroup">
+        <label class="reminder-radio">
+          <input type="radio" name="reminderMethod" value="calendar" id="reminderMethodCalendar">
+          <span>📅 添加到日历</span>
+        </label>
+        <label class="reminder-radio" id="reminderMethodPwaWrap">
+          <input type="radio" name="reminderMethod" value="pwa" id="reminderMethodPwa">
+          <span>🔔 PWA 提醒</span>
+        </label>
+        <label class="reminder-radio" id="reminderMethodBothWrap">
+          <input type="radio" name="reminderMethod" value="both" id="reminderMethodBoth">
+          <span>📅+🔔 两者都要</span>
+        </label>
+      </div>
       <p class="reminder-dialog__hint" id="reminderSettingsHint"></p>
       <div class="reminder-dialog__actions">
         <button class="btn btn--outline" id="reminderSettingsClose" type="button">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 非 iOS Safari：.ics 下载后的「通过日历打开」提示（可点不再提醒） -->
+  <div class="reminder-overlay" id="reminderIcsHint" hidden>
+    <div class="reminder-dialog" role="dialog" aria-modal="true" aria-labelledby="reminderIcsHintTitle">
+      <h3 id="reminderIcsHintTitle">日历文件已下载</h3>
+      <p id="reminderIcsHintText">请在「文件管理」或「日历」应用中打开该 .ics 文件以导入提醒。</p>
+      <div class="reminder-dialog__actions">
+        <button class="btn btn--ghost" id="reminderIcsHintDismiss" type="button">不再提醒</button>
+        <button class="btn btn--outline" id="reminderIcsHintClose" type="button">知道了</button>
       </div>
     </div>
   </div>
@@ -243,8 +262,9 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260904-16" type="module"></script></body>
+  <script src="app.js?v=20260904-17" type="module"></script></body>
 </html>
+
 
 
 
