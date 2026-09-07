@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="style.css?v=20260904-15">
+  <link rel="stylesheet" href="style.css?v=20260904-16">
 </head>
 <body>
   <a href="#view-main" class="skip-link">跳转到主内容</a>
@@ -21,7 +21,10 @@
     <div class="hero">
       <p class="eyebrow">BIT · Campus Shuttle <span class="badge" id="scheduleBadge">工作日</span></p>
       <div class="hero__row">
-        <h1>良乡 ⇄ 中关村 校园班车</h1>
+        <h1 class="hero__title">
+          <span class="hero__title-full">良乡 ⇄ 中关村 校园班车</span>
+          <span class="hero__title-mini">校园班车</span>
+        </h1>
         <nav class="view-switch" aria-label="切换显示模式">
           <button type="button" class="view-switch__btn view-switch__btn--active" data-view="main" aria-pressed="true">标准屏</button>
           <button type="button" class="view-switch__btn" data-view="fids" aria-pressed="false">PIDS</button>
@@ -29,6 +32,16 @@
         <div class="clock-wrap">
           <time id="liveClock" class="live-clock" datetime="">--:--:--</time>
         </div>
+      </div>
+      <div class="freeze-row" aria-hidden="true">
+        <span class="freeze-row__title">校园班车</span>
+        <div class="freeze-switch freeze-switch--A" data-switch="A">
+          <button class="fs-single" type="button" aria-label="切换显示模式">
+            <span class="fs-single__label fs-single__label--main">标准屏</span>
+            <span class="fs-single__label fs-single__label--pids">PIDS</span>
+          </button>
+        </div>
+        <time class="live-clock freeze-clock">--:--:--</time>
       </div>
     </div>
   </header>
@@ -199,8 +212,9 @@
     </div>
   </noscript>
 
-  <script src="app.js?v=20260904-15" type="module"></script></body>
+  <script src="app.js?v=20260904-16" type="module"></script></body>
 </html>
+
 
 
 

@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-15";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-16";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260904-15";
-import { now, syncClock } from "./lib/time.js?v=20260904-15";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-15";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-15";
+} from "./lib/schedule.js?v=20260904-16";
+import { now, syncClock } from "./lib/time.js?v=20260904-16";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-16";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-16";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -27,8 +27,8 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-15";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-15";
+} from "./lib/availability.js?v=20260904-16";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-16";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -41,6 +41,8 @@ const fwdTrip = (t) => FWD.has(t.route);
 
 const dom = {
   clock: document.getElementById("liveClock"),
+  freezeClock: document.querySelector(".freeze-clock"),
+  freezeSingle: document.querySelector(".fs-single"),
   scheduleBadge: document.getElementById("scheduleBadge"),
   viewMain: document.getElementById("view-main"),
   viewFids: document.getElementById("view-fids"),
@@ -305,7 +307,31 @@ function applyView() {
     btn.classList.toggle("view-switch__btn--active", active);
     btn.setAttribute("aria-pressed", String(active));
   }
+  // 冻结态单按钮：is-pids 触发「标准屏⇄PIDS」标签交叉过渡
+  if (dom.freezeSingle) dom.freezeSingle.classList.toggle("is-pids", fids);
   if (fids) state.fidsAutoScroll = true;
+}
+
+/* ===== 滚动收缩 Header：body.header--frozen（阈值直达，不分阶段） ===== */
+const HEADER_FROZEN_AT = 120;
+
+function initFrozenHeader() {
+  const sync = () => {
+    document.body.classList.toggle("header--frozen", window.scrollY >= HEADER_FROZEN_AT);
+  };
+  window.addEventListener("scroll", sync, { passive: true });
+  sync();
+  // 冻结单按钮：点击直接切换 main ⇄ PIDS
+  const single = dom.freezeSingle;
+  if (single) {
+    single.addEventListener("click", () => {
+      const target = isFidsPath() ? "#/" : "#/PIDS";
+      if (location.hash === target) return;
+      location.hash = target;
+      applyView();
+      tick();
+    });
+  }
 }
 
 function bindViewSwitch() {
@@ -839,6 +865,10 @@ function tick() {
   const todayAll = computeForDate(activeTrips(nowDate), n, nowDate);
   dom.clock.textContent = formatClock(nowDate);
   dom.clock.setAttribute("datetime", nowDate.toISOString());
+  if (dom.freezeClock) {
+    dom.freezeClock.textContent = formatClock(nowDate);
+    dom.freezeClock.setAttribute("datetime", nowDate.toISOString());
+  }
   dom.scheduleBadge.textContent = badgeText(display.refDate, nowDate);
   renderTrack(todayAll, n);
   renderRunningList(todayAll, n);
@@ -930,6 +960,7 @@ function bindRefreshBtn() {
 hideXishanUi();
 bindTheme();
 bindViewSwitch();
+initFrozenHeader();
 bindChips();
 bindDetailToggle();
 bindAmapQr();
@@ -957,6 +988,7 @@ if (initQQBrowserGuide()) {
 applyView();
 tick();
 setInterval(tick, 1000);
+
 
 
 

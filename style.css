@@ -163,17 +163,21 @@ a:hover {
   color: var(--primary-hover);
 }
 
-/* ===== Header ===== */
+/* ===== Header（滚动收缩：sticky + 冻结态单按钮切换） ===== */
 .site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   background: var(--header-bg);
   border-bottom: 1px solid var(--border);
   padding: 48px 24px 40px;
-  transition: background .3s ease;
+  transition: background .3s ease, padding .3s ease-in-out;
 }
 
 .hero {
   max-width: 1520px;
   margin: 0 auto;
+  transition: max-height .3s ease-in-out;
 }
 
 .eyebrow {
@@ -183,6 +187,7 @@ a:hover {
   text-transform: uppercase;
   color: var(--primary);
   margin-bottom: 8px;
+  transition: max-height .3s ease-in-out, opacity .3s ease-in-out, margin .3s ease-in-out, transform .3s ease-in-out;
 }
 
 .badge {
@@ -203,6 +208,27 @@ a:hover {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  transition: max-height .3s ease-in-out, opacity .3s ease-in-out;
+}
+
+/* 标题双态：完整「良乡 ⇄ 中关村 校园班车」/ 冻结态迷你「校园班车」 */
+.hero__title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--text);
+  margin-bottom: 12px;
+  transition: font-size .3s ease-in-out;
+}
+.hero__title-full {
+  display: inline;
+}
+.hero__title-mini {
+  display: none;
+}
+.hero__title-mini,
+.hero__title-full {
+  transition: opacity .3s ease-in-out, transform .3s ease-in-out;
 }
 
 /* ===== View switch (标准屏 / FIDS) ===== */
@@ -213,6 +239,7 @@ a:hover {
   border-radius: 999px;
   background: var(--surface-2);
   border: 1px solid var(--border);
+  transition: transform .3s ease-in-out;
 }
 
 .view-switch__btn {
@@ -238,14 +265,6 @@ a:hover {
   outline-offset: 2px;
 }
 
-.hero h1 {
-  font-size: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -.02em;
-  color: var(--text);
-  margin-bottom: 12px;
-}
-
 .clock-wrap {
   display: flex;
   flex-direction: column;
@@ -264,6 +283,118 @@ a:hover {
   border-radius: 14px;
   padding: 8px 20px;
   box-shadow: var(--shadow);
+  transition: font-size .3s ease-in-out, padding .3s ease-in-out;
+}
+
+/* ---- 冻结态（body.header--frozen，滚动量 ≥ 阈值，直接过渡）：
+       header 收缩到最小高度，hero 主行隐藏，冻结行（校园班车 + 单按钮 + 时间）显示 ---- */
+body.header--frozen .site-header {
+  padding: 0;
+}
+body.header--frozen .eyebrow {
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  overflow: hidden;
+  transform: translateY(-6px);
+}
+body.header--frozen .hero__row {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+body.header--frozen .hero {
+  max-height: 52px;
+}
+body.header--frozen .hero__title {
+  margin-bottom: 0;
+  font-size: 1rem;
+}
+
+.freeze-row {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: 52px;
+  padding: 0 16px;
+  opacity: 0;
+  transition: opacity .3s ease-in-out;
+}
+body.header--frozen .freeze-row {
+  display: flex;
+  opacity: 1;
+}
+.freeze-row__title {
+  font-size: 1rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.freeze-row .live-clock {
+  font-size: .95rem;
+  padding: 4px 10px;
+}
+
+/* 冻结态单按钮切换（方案 A：点击直接切到另一模式，两层标签交叉过渡） */
+.freeze-switch {
+  position: relative;
+  flex: 0 0 auto;
+}
+.freeze-switch--A {
+  width: 104px;
+  height: 34px;
+}
+.fs-single {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(28, 25, 23, .15);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.fs-single:active {
+  transform: scale(.96);
+}
+.fs-single__label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .82rem;
+  font-weight: 600;
+  transition: opacity .3s ease-in-out, transform .3s ease-in-out;
+}
+.fs-single__label--pids {
+  opacity: 0;
+  transform: translateY(100%);
+}
+.fs-single.is-pids .fs-single__label--main {
+  opacity: 0;
+  transform: translateY(-100%);
+}
+.fs-single.is-pids .fs-single__label--pids {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .freeze-row,
+  .fs-single__label,
+  .site-header,
+  .hero,
+  .eyebrow,
+  .hero__row,
+  .hero__title,
+  .live-clock,
+  .view-switch {
+    transition: none;
+  }
 }
 
 /* ===== Main Shell ===== */
@@ -1694,7 +1825,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
 }
 
 @media (max-width: 768px) {
-  .hero h1 {
+  .hero__title {
     font-size: 1.8rem;
   }
   .live-clock {
