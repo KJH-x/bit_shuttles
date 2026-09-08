@@ -73,12 +73,12 @@ function computeTrip(row, seatData, nowMs, date, isToday) {
   const disable = Array.isArray(seatData.disable_seat) ? seatData.disable_seat.length : 0;
   const reserved = Number(seatData.reserved_count ?? 0);
   const rn = Number(seatData.reservation_num ?? 0);
-  const bookable = rn - disable; // 真实余票
+  const bookable = rn - disable; // 真实余票（可为负，表示超额售罄）
   const total = reserved + rn - disable; // 可约总座席
   const availableRaw = bookable > 0 ? bookable : 0;
   const available = paid && !visible ? null : availableRaw;
   const pct = availableRaw != null && total > 0 ? Math.round((availableRaw / total) * 100) : null;
-  // bookable=原始余票：缓存用，供 applyVisibility 按当前时刻重算可见性（避免窗口跨边界的灰色闪现）
+  // bookable=原始余票（未 clamp，缓存用，供 applyVisibility 重算）；negative 表示售罄
   return { route, dep, name: row.name, paid, rainbow, phase, ttl, visible, available, bookable, total, pct };
 }
 
@@ -218,8 +218,12 @@ export async function onRequest({ request, env, waitUntil }) {
       const ttl = paid ? paidPhaseTtl(nowMs, tMs).ttl : freeTtl(nowMs, tMs, isToday);
       const ttlSec = ttl != null && ttl > 0 ? ttl : LIVE_DEFAULT_TTL;
       const fresh = cached.fetchedAt != null && nowMs - cached.fetchedAt < ttlSec * 1000;
-      // 过期：立刻返回旧值，后台刷新
-      if (!fresh) {
+      // 售罄班次（paid && available===0）：余票变化敏感，fresh 窗口内也提前后台刷新，
+      // 下一请求即可拿到新值（售罄→回补、或有票→售罄 都更快反映）
+      const soldOut = cached.paid === true && cached.available === 0;
+      const refreshAnyway = soldOut && nowMs - cached.fetchedAt > 20 * 1000;
+      // 过期或售罄需刷新：立刻返回旧值，后台刷新
+      if (!fresh || refreshAnyway) {
         waitUntil(
           (async () => {
             try {

@@ -36,7 +36,7 @@ export function paidPhaseTtl(nowMs, tMs) {
   if (nowMs < T - pre - plus) return { phase: "presale", ttl: 3600 };
   if (nowMs < T - pre) return { phase: "preboard", ttl: 180 };
   if (nowMs < T - pre + plus) return { phase: "onsale", ttl: 20 };
-  if (nowMs < T - PAID_STOP_MIN * MIN) return { phase: "regular", ttl: 180 };
+  if (nowMs < T - PAID_STOP_MIN * MIN) return { phase: "regular", ttl: 60 };
   return { phase: "closed", ttl: null };
 }
 
@@ -63,7 +63,9 @@ export function applyVisibility(trip, nowMs, dateStr) {
   if (trip.paid !== true || trip.bookable == null) return trip;
   const tMs = depToMs(trip.dep, dateStr || beijingDateStr(nowMs));
   const visible = isVisible(nowMs, tMs);
-  const available = visible ? trip.bookable : null;
+  // bookable 可为负（超额售罄）；clamp 到 ≥0，避免负数余票/百分比
+  const bookable = trip.bookable > 0 ? trip.bookable : 0;
+  const available = visible ? bookable : null;
   if (available === trip.available) return trip;
   return { ...trip, available, visible };
 }

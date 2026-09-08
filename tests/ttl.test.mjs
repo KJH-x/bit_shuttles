@@ -47,8 +47,8 @@ test("paidPhaseTtl: 各阶段边界（T-70min / T-60min / T-50min / T-5min）", 
   assert.deepEqual(paidPhaseTtl(T - pre + 1, T), { phase: "preboard", ttl: 180 });
   assert.deepEqual(paidPhaseTtl(T - open + 1, T), { phase: "onsale", ttl: 20 });
   assert.deepEqual(paidPhaseTtl(T - open + plus - 1, T), { phase: "onsale", ttl: 20 });
-  assert.deepEqual(paidPhaseTtl(T - open + plus + 1, T), { phase: "regular", ttl: 180 });
-  assert.deepEqual(paidPhaseTtl(T - stop - 1, T), { phase: "regular", ttl: 180 });
+  assert.deepEqual(paidPhaseTtl(T - open + plus + 1, T), { phase: "regular", ttl: 60 });
+  assert.deepEqual(paidPhaseTtl(T - stop - 1, T), { phase: "regular", ttl: 60 });
   assert.deepEqual(paidPhaseTtl(T - stop + 1, T), { phase: "closed", ttl: null });
 });
 
@@ -143,6 +143,19 @@ test("applyVisibility: 免费班次 / 无 bookable 的老缓存原样返回", ()
   assert.equal(applyVisibility(legacy, Date.now(), date), legacy);
   assert.equal(applyVisibility(null, Date.now(), date), null);
   assert.deepEqual(applyVisibility({}, Date.now(), date), {});
+});
+
+test("applyVisibility: bookable 为负（超额售罄）时 available clamp 到 0", () => {
+  const date = "2026-09-04";
+  const T = depToMs("18:00", date);
+  // 源站 reservation_num=1、disable=3 → bookable=-2（售罄）
+  const cached = { route: "c", dep: "18:00", paid: true, bookable: -2, available: 0, total: 48, pct: 0 };
+  const now = T - 60 * 60000; // 窗口内
+  const out = applyVisibility(cached, now, date);
+  assert.equal(out.available, 0); // clamp 非负数
+  // 窗口外 → null（不展示数字）
+  const out2 = applyVisibility(cached, T - 4 * 3600 * 1000, date);
+  assert.equal(out2.available, null);
 });
 
 test("shiftDate: 前后偏移", () => {
