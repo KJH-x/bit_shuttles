@@ -39,7 +39,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEP_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_TS_SKEW_MS = 30 * 60000;
 const LIVE_DEFAULT_TTL = 60;
-const META_TTL = 3600; // get-list 元数据缓存 1h
+const META_TTL = 300; // get-list 元数据缓存（封顶 5 分钟）
 const ROUTES_OK = new Set(["a", "c", "d", "e"]);
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -202,9 +202,9 @@ export async function onRequest({ request, env, waitUntil }) {
   if (isPast) {
     const snap = await readSnapshot(bucket, date);
     return json(
-      { serverNow: nowMs, date, minTtl: 3600, source: "snapshot", traffic: null, trips: snap ? snap.trips : [] },
+      { serverNow: nowMs, date, minTtl: 300, source: "snapshot", traffic: null, trips: snap ? snap.trips : [] },
       200,
-      cacheHeaders(3600)
+      cacheHeaders(300)
     );
   }
 
@@ -244,6 +244,7 @@ export async function onRequest({ request, env, waitUntil }) {
           dep: depParam,
           minTtl: ttlSec,
           source: fresh ? "cache" : "stale",
+          dataFetchedAt: typeof cached.fetchedAt === "number" ? cached.fetchedAt : nowMs,
           trips: [applyVisibility(cached, nowMs, date)]
         },
         200,
@@ -263,7 +264,7 @@ export async function onRequest({ request, env, waitUntil }) {
       const paid = trip ? trip.paid === true : false;
       const ttlSec = trip && trip.ttl != null && trip.ttl > 0 ? trip.ttl : LIVE_DEFAULT_TTL;
       return json(
-        { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: ttlSec, source: "live", trips: trip ? [applyVisibility(trip, nowMs, date)] : [] },
+        { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: ttlSec, source: "live", dataFetchedAt: nowMs, trips: trip ? [applyVisibility(trip, nowMs, date)] : [] },
         200,
         cacheHeaders(ttlSec)
       );
@@ -292,7 +293,7 @@ export async function onRequest({ request, env, waitUntil }) {
       );
     }
     return json(
-      { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", traffic: live.traffic || null, trips: live.trips.map((t) => applyVisibility(t, nowMs, date)) },
+      { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", dataFetchedAt: typeof live.fetchedAt === "number" ? live.fetchedAt : nowMs, traffic: live.traffic || null, trips: live.trips.map((t) => applyVisibility(t, nowMs, date)) },
       200,
       cacheHeaders(ttl)
     );
@@ -302,7 +303,7 @@ export async function onRequest({ request, env, waitUntil }) {
   try {
     const { trips, traffic, mTtl } = await refreshAll(env, secret, schemeOrder, date, nowMs, isToday);
     return json(
-      { serverNow: nowMs, date, minTtl: mTtl, source: "live", traffic, trips: trips.map((t) => applyVisibility(t, nowMs, date)) },
+      { serverNow: nowMs, date, minTtl: mTtl, source: "live", dataFetchedAt: nowMs, traffic, trips: trips.map((t) => applyVisibility(t, nowMs, date)) },
       200,
       cacheHeaders(mTtl)
     );
@@ -313,3 +314,4 @@ export async function onRequest({ request, env, waitUntil }) {
     return json({ serverNow: nowMs, date, minTtl: 60, source: "degraded", traffic: null, trips: [] }, 200, cacheHeaders(60));
   }
 }
+

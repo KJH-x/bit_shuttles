@@ -79,17 +79,22 @@ test("savePref/readPref: 往返一致且写入 PREF_KEY", () => {
 
 test("reminders: set/read/has/unset 按 日期|route|dep 独立（可多选）", () => {
   store.clear();
-  setReminder("2026-09-08", "a", "07:30", "calendar");
-  setReminder("2026-09-08", "c", "08:10", "pwa");
-  assert.equal(hasReminder("2026-09-08", "a", "07:30"), true);
-  assert.equal(hasReminder("2026-09-08", "c", "08:10"), true);
-  assert.equal(hasReminder("2026-09-08", "a", "08:10"), false);
-  assert.equal(reminderMethodOf("2026-09-08", "a", "07:30"), "calendar");
-  assert.equal(reminderMethodOf("2026-09-08", "c", "08:10"), "pwa");
-  assert.equal(remindKey("2026-09-08", "a", "07:30"), "2026-09-08|a|07:30");
-  unsetReminder("2026-09-08", "a", "07:30");
-  assert.equal(hasReminder("2026-09-08", "a", "07:30"), false);
-  assert.equal(hasReminder("2026-09-08", "c", "08:10"), true);
+  mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-08T02:00:00Z").getTime() });
+  try {
+    setReminder("2026-09-08", "a", "07:30", "calendar");
+    setReminder("2026-09-08", "c", "08:10", "pwa");
+    assert.equal(hasReminder("2026-09-08", "a", "07:30"), true);
+    assert.equal(hasReminder("2026-09-08", "c", "08:10"), true);
+    assert.equal(hasReminder("2026-09-08", "a", "08:10"), false);
+    assert.equal(reminderMethodOf("2026-09-08", "a", "07:30"), "calendar");
+    assert.equal(reminderMethodOf("2026-09-08", "c", "08:10"), "pwa");
+    assert.equal(remindKey("2026-09-08", "a", "07:30"), "2026-09-08|a|07:30");
+    unsetReminder("2026-09-08", "a", "07:30");
+    assert.equal(hasReminder("2026-09-08", "a", "07:30"), false);
+    assert.equal(hasReminder("2026-09-08", "c", "08:10"), true);
+  } finally {
+    mock.timers.reset();
+  }
 });
 
 test("reminders: 生命周期——过期日期（早于今日）读取时被清理", () => {
