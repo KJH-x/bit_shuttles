@@ -22,6 +22,7 @@ import {
 } from "../functions/_shared/metrics.js";
 import { md5Hex } from "../functions/_shared/md5.js";
 import { sign } from "../functions/_shared/school.js";
+import { mainAvailText } from "../lib/availability.js";
 
 const MIN = 60000;
 const T = Date.UTC(2026, 8, 4, 10, 0, 0) - 8 * 3600 * 1000; // Beijing 2026-09-04 10:00
@@ -43,21 +44,21 @@ test("md5: 双重 MD5 签名与实测一致", () => {
 
 test("paidPhaseTtl: 各阶段边界（T-70min / T-60min / T-50min / T-5min）", () => {
   const pre = 70 * MIN, open = 60 * MIN, plus = 10 * MIN, stop = 5 * MIN;
-  assert.deepEqual(paidPhaseTtl(T - pre - 1, T), { phase: "presale", ttl: 3600 });
+  assert.deepEqual(paidPhaseTtl(T - pre - 1, T), { phase: "presale", ttl: 300 });
   assert.deepEqual(paidPhaseTtl(T - pre + 1, T), { phase: "preboard", ttl: 180 });
   assert.deepEqual(paidPhaseTtl(T - open + 1, T), { phase: "onsale", ttl: 20 });
   assert.deepEqual(paidPhaseTtl(T - open + plus - 1, T), { phase: "onsale", ttl: 20 });
-  assert.deepEqual(paidPhaseTtl(T - open + plus + 1, T), { phase: "regular", ttl: 180 });
-  assert.deepEqual(paidPhaseTtl(T - stop - 1, T), { phase: "regular", ttl: 180 });
+  assert.deepEqual(paidPhaseTtl(T - open + plus + 1, T), { phase: "regular", ttl: 60 });
+  assert.deepEqual(paidPhaseTtl(T - stop - 1, T), { phase: "regular", ttl: 60 });
   assert.deepEqual(paidPhaseTtl(T - stop + 1, T), { phase: "closed", ttl: null });
 });
 
-test("freeTtl: 2h / 30min / 1day（Q4）", () => {
-  assert.equal(freeTtl(T - 4 * 3600 * 1000, T, true), 7200);
-  assert.equal(freeTtl(T - 2 * 3600 * 1000, T, true), 1800);
-  assert.equal(freeTtl(T - 1 * 60000, T, true), 1800);
-  assert.equal(freeTtl(T - 3600 * 1000, T, false), 86400);
-  assert.equal(freeTtl(T + 60000, T, true), 86400);
+test("freeTtl: 全部封顶 5 分钟（v1.25）", () => {
+  assert.equal(freeTtl(T - 4 * 3600 * 1000, T, true), 300);
+  assert.equal(freeTtl(T - 2 * 3600 * 1000, T, true), 300);
+  assert.equal(freeTtl(T - 1 * 60000, T, true), 300);
+  assert.equal(freeTtl(T - 3600 * 1000, T, false), 300);
+  assert.equal(freeTtl(T + 60000, T, true), 300);
 });
 
 test("isVisible: 3h 窗口", () => {
@@ -145,8 +146,51 @@ test("applyVisibility: 免费班次 / 无 bookable 的老缓存原样返回", ()
   assert.deepEqual(applyVisibility({}, Date.now(), date), {});
 });
 
+test("applyVisibility: bookable 为负（超额售罄）时 available clamp 到 0", () => {
+  const date = "2026-09-04";
+  const T = depToMs("18:00", date);
+  // 源站 reservation_num=1、disable=3 → bookable=-2（售罄）
+  const cached = { route: "c", dep: "18:00", paid: true, bookable: -2, available: 0, total: 48, pct: 0 };
+  const now = T - 60 * 60000; // 窗口内
+  const out = applyVisibility(cached, now, date);
+  assert.equal(out.available, 0); // clamp 非负数
+  // 窗口外 → null（不展示数字）
+  const out2 = applyVisibility(cached, T - 4 * 3600 * 1000, date);
+  assert.equal(out2.available, null);
+});
+
 test("shiftDate: 前后偏移", () => {
   assert.equal(shiftDate("2026-09-04", 5), "2026-09-09");
   assert.equal(shiftDate("2026-09-04", -8), "2026-08-27");
   assert.equal(shiftDate("2026-01-01", -1), "2025-12-31");
+});
+
+test("mainAvailText: 窗口外售罄班次（available=null, bookable≤0）显示「售罄」而非消失", () => {
+  // 窗口外：available=null、pct=0、bookable<=0（源站售罄）→ 必须显示「售罄」
+  const soldOutOutside = mainAvailText({
+    route: "c", dep: "07:30",
+    avail: { route: "c", dep: "07:30", paid: true, available: null, bookable: -2, total: 48, pct: 0 }
+  });
+  assert.deepEqual(soldOutOutside, { value: "售罄", color: "red" });
+
+  // 窗口外非售罄：available=null、pct>0 → 显示百分比
+  const pctOnly = mainAvailText({
+    route: "a", dep: "07:50",
+    avail: { route: "a", dep: "07:50", paid: true, available: null, bookable: 4, total: 48, pct: 8 }
+  });
+  assert.deepEqual(pctOnly, { value: "8%", color: "" });
+
+  // 窗口内售罄：available=0 → 售罄
+  const soldOutIn = mainAvailText({
+    route: "c", dep: "20:00",
+    avail: { route: "c", dep: "20:00", paid: true, available: 0, bookable: 0, total: 48, pct: 0 }
+  });
+  assert.deepEqual(soldOutIn, { value: "售罄", color: "red" });
+
+  // 窗口内有余：available>0 → 数字
+  const count = mainAvailText({
+    route: "a", dep: "20:15",
+    avail: { route: "a", dep: "20:15", paid: true, available: 20, bookable: 20, total: 48, pct: 42 }
+  });
+  assert.deepEqual(count, { value: "20", color: "green" });
 });

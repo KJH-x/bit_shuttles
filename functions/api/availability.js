@@ -39,7 +39,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEP_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_TS_SKEW_MS = 30 * 60000;
 const LIVE_DEFAULT_TTL = 60;
-const META_TTL = 3600; // get-list 元数据缓存 1h
+const META_TTL = 300; // get-list 元数据缓存（封顶 5 分钟）
 const ROUTES_OK = new Set(["a", "c", "d", "e"]);
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -73,12 +73,12 @@ function computeTrip(row, seatData, nowMs, date, isToday) {
   const disable = Array.isArray(seatData.disable_seat) ? seatData.disable_seat.length : 0;
   const reserved = Number(seatData.reserved_count ?? 0);
   const rn = Number(seatData.reservation_num ?? 0);
-  const bookable = rn - disable; // 真实余票
+  const bookable = rn - disable; // 真实余票（可为负，表示超额售罄）
   const total = reserved + rn - disable; // 可约总座席
   const availableRaw = bookable > 0 ? bookable : 0;
   const available = paid && !visible ? null : availableRaw;
   const pct = availableRaw != null && total > 0 ? Math.round((availableRaw / total) * 100) : null;
-  // bookable=原始余票：缓存用，供 applyVisibility 按当前时刻重算可见性（避免窗口跨边界的灰色闪现）
+  // bookable=原始余票（未 clamp，缓存用，供 applyVisibility 重算）；negative 表示售罄
   return { route, dep, name: row.name, paid, rainbow, phase, ttl, visible, available, bookable, total, pct };
 }
 
@@ -202,9 +202,9 @@ export async function onRequest({ request, env, waitUntil }) {
   if (isPast) {
     const snap = await readSnapshot(bucket, date);
     return json(
-      { serverNow: nowMs, date, minTtl: 3600, source: "snapshot", traffic: null, trips: snap ? snap.trips : [] },
+      { serverNow: nowMs, date, minTtl: 300, source: "snapshot", traffic: null, trips: snap ? snap.trips : [] },
       200,
-      cacheHeaders(3600)
+      cacheHeaders(300)
     );
   }
 
@@ -218,8 +218,12 @@ export async function onRequest({ request, env, waitUntil }) {
       const ttl = paid ? paidPhaseTtl(nowMs, tMs).ttl : freeTtl(nowMs, tMs, isToday);
       const ttlSec = ttl != null && ttl > 0 ? ttl : LIVE_DEFAULT_TTL;
       const fresh = cached.fetchedAt != null && nowMs - cached.fetchedAt < ttlSec * 1000;
-      // 过期：立刻返回旧值，后台刷新
-      if (!fresh) {
+      // 售罄班次（paid && available===0）：余票变化敏感，fresh 窗口内也提前后台刷新，
+      // 下一请求即可拿到新值（售罄→回补、或有票→售罄 都更快反映）
+      const soldOut = cached.paid === true && cached.available === 0;
+      const refreshAnyway = soldOut && nowMs - cached.fetchedAt > 20 * 1000;
+      // 过期或售罄需刷新：立刻返回旧值，后台刷新
+      if (!fresh || refreshAnyway) {
         waitUntil(
           (async () => {
             try {
@@ -240,6 +244,7 @@ export async function onRequest({ request, env, waitUntil }) {
           dep: depParam,
           minTtl: ttlSec,
           source: fresh ? "cache" : "stale",
+          dataFetchedAt: typeof cached.fetchedAt === "number" ? cached.fetchedAt : nowMs,
           trips: [applyVisibility(cached, nowMs, date)]
         },
         200,
@@ -259,7 +264,7 @@ export async function onRequest({ request, env, waitUntil }) {
       const paid = trip ? trip.paid === true : false;
       const ttlSec = trip && trip.ttl != null && trip.ttl > 0 ? trip.ttl : LIVE_DEFAULT_TTL;
       return json(
-        { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: ttlSec, source: "live", trips: trip ? [applyVisibility(trip, nowMs, date)] : [] },
+        { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: ttlSec, source: "live", dataFetchedAt: nowMs, trips: trip ? [applyVisibility(trip, nowMs, date)] : [] },
         200,
         cacheHeaders(ttlSec)
       );
@@ -288,7 +293,7 @@ export async function onRequest({ request, env, waitUntil }) {
       );
     }
     return json(
-      { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", traffic: live.traffic || null, trips: live.trips.map((t) => applyVisibility(t, nowMs, date)) },
+      { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", dataFetchedAt: typeof live.fetchedAt === "number" ? live.fetchedAt : nowMs, traffic: live.traffic || null, trips: live.trips.map((t) => applyVisibility(t, nowMs, date)) },
       200,
       cacheHeaders(ttl)
     );
@@ -298,7 +303,7 @@ export async function onRequest({ request, env, waitUntil }) {
   try {
     const { trips, traffic, mTtl } = await refreshAll(env, secret, schemeOrder, date, nowMs, isToday);
     return json(
-      { serverNow: nowMs, date, minTtl: mTtl, source: "live", traffic, trips: trips.map((t) => applyVisibility(t, nowMs, date)) },
+      { serverNow: nowMs, date, minTtl: mTtl, source: "live", dataFetchedAt: nowMs, traffic, trips: trips.map((t) => applyVisibility(t, nowMs, date)) },
       200,
       cacheHeaders(mTtl)
     );
@@ -309,3 +314,4 @@ export async function onRequest({ request, env, waitUntil }) {
     return json({ serverNow: nowMs, date, minTtl: 60, source: "degraded", traffic: null, trips: [] }, 200, cacheHeaders(60));
   }
 }
+

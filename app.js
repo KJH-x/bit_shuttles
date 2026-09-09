@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-14";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-18";
 import {
   formatClock,
   formatHM,
@@ -12,11 +12,12 @@ import {
   checkpointLabel,
   checkpointOffsets,
   tripLocation,
-  campusStopAt
-} from "./lib/schedule.js?v=20260904-14";
-import { now, syncClock } from "./lib/time.js?v=20260904-14";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-14";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-14";
+  campusStopAt,
+  etaDiffMin
+} from "./lib/schedule.js?v=20260904-18";
+import { now, syncClock } from "./lib/time.js?v=20260904-18";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-18";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-18";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -26,8 +27,29 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-14";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-14";
+} from "./lib/availability.js?v=20260904-18";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-18";
+import {
+  readPref,
+  savePref,
+  readReminders,
+  hasReminder,
+  setReminder,
+  unsetReminder,
+  reminderMethodOf,
+  isPwa,
+  isIosSafari,
+  notificationSupported,
+  notificationGranted,
+  ensureNotificationPermission,
+  icsHintDismissed,
+  dismissIcsHint,
+  openDingTalk,
+  buildReminderIcs,
+  buildReminderFilename,
+  downloadIcs,
+  schedulePwaNotify
+} from "./lib/reminder.js?v=20260904-18";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -62,6 +84,28 @@ const dom = {
   amapButtons: [...document.querySelectorAll(".amap-links__btn")],
   amapQr: document.getElementById("amapQr"),
   trafficLiveNote: document.getElementById("trafficLiveNote"),
+  reminderBtn: document.getElementById("reminderBtn"),
+  reminderGuide: document.getElementById("reminderGuide"),
+  reminderGuideYes: document.getElementById("reminderGuideYes"),
+  reminderGuideNo: document.getElementById("reminderGuideNo"),
+  reminderGuideMethods: document.getElementById("reminderGuideMethods"),
+  reminderGuideMethodPwa: document.getElementById("reminderGuideMethodPwa"),
+  reminderGuideMethodBoth: document.getElementById("reminderGuideMethodBoth"),
+  reminderGuideText: document.getElementById("reminderGuideText"),
+  reminderGuideHint: document.getElementById("reminderGuideHint"),
+  reminderSettings: document.getElementById("reminderSettings"),
+  reminderEnabled: document.getElementById("reminderEnabled"),
+  reminderMethodGroup: document.getElementById("reminderMethodGroup"),
+  reminderMethodCalendar: document.getElementById("reminderMethodCalendar"),
+  reminderMethodPwa: document.getElementById("reminderMethodPwa"),
+  reminderMethodBoth: document.getElementById("reminderMethodBoth"),
+  reminderMethodPwaWrap: document.getElementById("reminderMethodPwaWrap"),
+  reminderMethodBothWrap: document.getElementById("reminderMethodBothWrap"),
+  reminderSettingsHint: document.getElementById("reminderSettingsHint"),
+  reminderIcsHint: document.getElementById("reminderIcsHint"),
+  reminderIcsHintDismiss: document.getElementById("reminderIcsHintDismiss"),
+  reminderIcsHintClose: document.getElementById("reminderIcsHintClose"),
+  reminderSettingsClose: document.getElementById("reminderSettingsClose"),
   fidsBody: document.getElementById("fidsBody"),
   tripColumnA: document.getElementById("tripColumnA"),
   tripColumnC: document.getElementById("tripColumnC"),
@@ -484,20 +528,27 @@ function bindDetailToggle() {
 }
 
 /* ===== Running detail list ===== */
+// 运行详情检查点顺序：fwd 保持数据序（良乡→中关村）；rev 反转成同一方向（京良→杜家坎→六里桥），箭头随方向
+function tripCpList(trip) {
+  const cps = CHECKPOINTS[trip.route] || [];
+  return FWD.has(trip.route) ? cps : [...cps].reverse();
+}
+
 function runningItemHtml(trip, now) {
   const rainbowTag = trip.rainbow ? '<span class="tag">🌈 彩虹班车</span>' : "";
   const elapsed = now - trip.depMs;
   const remaining = trip.arrMs - now;
   const pct = Math.round(trip.progress * 100);
-const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
-  const cpMeta = CHECKPOINTS[trip.route] || [];
+  const cpMeta = tripCpList(trip);
+  const cps = checkpointTimes(trip, cpMeta);
+  const cpArrow = FWD.has(trip.route) ? "→" : "←";
   const cpLine = cps.length
     ? `<div class="running-item__cp" data-role="checkpoints">${cps.map((cp, i) => {
         const passed = now >= cp.ms;
         const meta = cpMeta[i] || {};
         const name = meta.name ? escapeHtml(meta.name) : escapeHtml(cp.label);
         const suffix = meta.note ? `<span class="running-item__cp-suffix">${escapeHtml(meta.note)}</span>` : "";
-        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${name}${suffix}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? '<span class="running-item__cp-arrow">→</span>' : ""}`;
+        return `<span class="running-item__cp-item${passed ? " is-passed" : ""}">${name}${suffix}<small>${escapeHtml(formatHM(new Date(cp.ms)))}</small></span>${i < cps.length - 1 ? `<span class="running-item__cp-arrow">${cpArrow}</span>` : ""}`;
       }).join("")}</div>`
     : "";
 return `
@@ -510,7 +561,7 @@ return `
         <span class="running-item__meta"><span data-role="pct">${pct}%</span> · 已行 ${escapeHtml(formatDurationLabel(elapsed))}</span>
       </div>
       <div class="running-item__foot">
-        <span>预计到达 <b>${escapeHtml(formatHM(new Date(trip.arrMs)))}</b></span>
+        <span>预计到达 <b>${escapeHtml(formatHM(new Date(trip.arrMs)))}</b><b class="eta-diff" data-role="eta-diff"></b></span>
         <span data-role="remaining">剩余 ${escapeHtml(formatDurationLabel(remaining))}</span>
       </div>
       ${cpLine}
@@ -551,11 +602,22 @@ function renderRunningList(all, now) {
     if (remEl) remEl.textContent = `剩余 ${formatDurationLabel(remaining)}`;
     const cpEls = li.querySelector('[data-role="checkpoints"]');
     if (cpEls) {
-      const cps = checkpointTimes(trip, CHECKPOINTS[trip.route]);
+      const cps = checkpointTimes(trip, tripCpList(trip));
       cps.forEach((cp, i) => {
         const item = cpEls.querySelectorAll(".running-item__cp-item")[i];
         if (item) item.classList.toggle("is-passed", now >= cp.ms);
       });
+    }
+    const diffEl = li.querySelector('[data-role="eta-diff"]');
+    if (diffEl) {
+      const diff = etaDiffMin(trip, DURATION_PROFILES);
+      if (diff == null) {
+        diffEl.textContent = "";
+        diffEl.className = "eta-diff";
+      } else {
+        diffEl.textContent = diff > 0 ? `+${diff}` : String(diff);
+        diffEl.className = `eta-diff ${diff > 0 ? "eta-diff--late" : "eta-diff--early"}`;
+      }
     }
   });
 }
@@ -643,6 +705,8 @@ function renderList(ul, list, now, highlightNext) {
     const trip = list.find((t) => t.id === li.dataset.id);
     if (!trip) return;
     updateTripAvail(li, trip);
+    // 已设置抢票提醒的班次金黄高亮（日期+班次限定）
+    li.classList.toggle("trip-item--reminded", hasReminder(viewDateStr(), trip.route, trip.dep));
     const cd = li.querySelector('[data-role="countdown"]');
     if (cd) {
       if (now < trip.depMs) {
@@ -728,15 +792,21 @@ const FIDS_ARROW_L = { c: "←", e: "←" };
 const FIDS_ARROW_R = { a: "→", d: "→" };
 const FIDS_ROUTE_COLOR = { a: "var(--dir-a)", c: "var(--dir-c)", d: "var(--dir-d)", e: "var(--dir-e)" };
 
-function fidsLocText(trip, now) {
-  const loc = tripLocation(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
-  return loc ? loc.text : "—";
+function fidsLocParts(trip, now, checkpoints, campus) {
+  const loc = tripLocation(trip, now, checkpoints, campus);
+  if (!loc) return { main: "—", note: "" };
+  // road 态且带收费站后缀：主文去掉后缀、note 单独渲染（窄屏隐藏）
+  if (loc.kind === "road" && loc.cpNote) {
+    return { main: loc.text.replace(loc.cpNote, ""), note: loc.cpNote };
+  }
+  return { main: loc.text, note: "" };
 }
 
 function fidsRowHtml(trip, now) {
   const st = fidsStatus(trip, now);
   const group = FIDS_ROW_GROUP[st.phase];
   const pct = st.phase === "dep" ? Math.round(trip.progress * 100) : 0;
+  const parts = fidsLocParts(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
   return `
     <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" data-dep="${escapeHtml(trip.dep)}" style="--pct:${pct}%">
       <span class="fids-row__arrow fids-row__arrow--l" aria-hidden="true">${FIDS_ARROW_L[trip.route] || ""}</span>
@@ -745,7 +815,9 @@ function fidsRowHtml(trip, now) {
       <span class="fids-row__dep">${escapeHtml(trip.dep)}</span>
       <span class="fids-row__pct" data-role="fids-pct">—</span>
       <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>
-      <span class="fids-row__loc" data-role="fids-loc">${escapeHtml(fidsLocText(trip, now))}</span>
+      <span class="fids-row__loc" data-role="fids-loc">
+        <span data-role="fids-loc-main">${escapeHtml(parts.main)}</span><span data-role="fids-loc-note">${escapeHtml(parts.note)}</span>
+      </span>
     </div>
   `;
 }
@@ -776,8 +848,11 @@ function renderFids(all, now) {
       el.textContent = st.label;
       el.className = `fids-st ${FIDS_PHASE_CLASS[st.phase]}`;
     }
-    const loc = row.querySelector('[data-role="fids-loc"]');
-    if (loc) loc.textContent = fidsLocText(trip, now);
+    const parts = fidsLocParts(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
+    const locMain = row.querySelector('[data-role="fids-loc-main"]');
+    const locNote = row.querySelector('[data-role="fids-loc-note"]');
+    if (locMain) locMain.textContent = parts.main;
+    if (locNote) locNote.textContent = parts.note;
   });
 }
 
@@ -896,6 +971,226 @@ function bindRefreshBtn() {
   title.addEventListener("keydown", onClick);
 }
 
+/* ===== 抢票提醒：点击班次引导 + 顶部设置面板 ===== */
+let pendingReminderTrip = null;
+let reminderCloseTimer = null;
+
+function clearReminderCloseTimer() {
+  if (reminderCloseTimer) {
+    clearTimeout(reminderCloseTimer);
+    reminderCloseTimer = null;
+  }
+}
+
+function closeReminderGuide(delayMs) {
+  clearReminderCloseTimer();
+  const doClose = () => {
+    dom.reminderGuide.hidden = true;
+    reminderCloseTimer = null;
+  };
+  if (delayMs > 0) {
+    reminderCloseTimer = setTimeout(doClose, delayMs);
+  } else {
+    doClose();
+  }
+}
+
+function promptReminder(trip) {
+  pendingReminderTrip = trip;
+  dom.reminderGuideText.textContent = "你刚刚触发了「添加抢票提醒功能」，是否要保留此功能？";
+  dom.reminderGuideYes.hidden = false;
+  dom.reminderGuideNo.hidden = false;
+  dom.reminderGuideHint.textContent = "";
+  dom.reminderGuide.hidden = false;
+}
+
+// 首次引导「是」→ 显示方式选择；非 PWA 隐藏 PWA/两者选项
+function showReminderMethods() {
+  const pwa = isPwa();
+  dom.reminderGuideYes.hidden = true;
+  dom.reminderGuideNo.hidden = true;
+  dom.reminderGuideHint.textContent = "";
+  if (dom.reminderGuideMethodPwa) dom.reminderGuideMethodPwa.hidden = !pwa;
+  if (dom.reminderGuideMethodBoth) dom.reminderGuideMethodBoth.hidden = !pwa;
+  dom.reminderGuideMethods.hidden = false;
+}
+
+// 生成 ICS 与导出文件名（班车.MMDD.HHMM.<hash4>.ics）
+function icsFor(trip, dateStr) {
+  const routeLabel = ROUTE_LABEL[trip.route];
+  return {
+    ics: buildReminderIcs({ routeLabel, dep: trip.dep, dateStr }),
+    filename: buildReminderFilename({ dateStr, dep: trip.dep })
+  };
+}
+
+// 执行提醒：calendar/both → ICS（非 iOS Safari 下载后弹打开日历提示）；pwa/both → PWA 通知
+async function applyReminder(trip, method, dateStr) {
+  const effective = method === "both" || method === "pwa" || method === "calendar" ? method : "calendar";
+  let message = "";
+  try {
+    if (effective === "calendar" || effective === "both") {
+      const { ics, filename } = icsFor(trip, dateStr);
+      downloadIcs(ics, filename);
+      setReminder(dateStr, trip.route, trip.dep, effective === "both" ? "both" : "calendar");
+      message = "已添加到日历（开售前 3 分钟提醒）";
+      if (!isIosSafari() && !icsHintDismissed()) {
+        showIcsHint();
+      }
+    }
+    if (effective === "pwa" || effective === "both") {
+      if (isPwa()) {
+        const granted = await ensureNotificationPermission();
+        if (granted) {
+          schedulePwaNotify({ routeLabel: ROUTE_LABEL[trip.route], dep: trip.dep, dateStr, offsetMin: DEFAULT_OFFSET_MIN });
+          setReminder(dateStr, trip.route, trip.dep, "pwa");
+          message = "已设置 PWA 提醒（开售前 3 分钟通知）";
+        } else {
+          const { ics, filename } = icsFor(trip, dateStr);
+          downloadIcs(ics, filename);
+          setReminder(dateStr, trip.route, trip.dep, "calendar");
+          message = "通知权限被拒绝，已回退为添加到日历";
+          if (!isIosSafari() && !icsHintDismissed()) showIcsHint();
+        }
+      } else {
+        const { ics, filename } = icsFor(trip, dateStr);
+        downloadIcs(ics, filename);
+        setReminder(dateStr, trip.route, trip.dep, "calendar");
+        message = "需安装到主屏幕才支持 PWA 提醒，已回退为添加到日历";
+        if (!isIosSafari() && !icsHintDismissed()) showIcsHint();
+      }
+    }
+  } catch (err) {
+    console.warn("applyReminder failed:", err);
+    message = "设置提醒失败，请稍后重试";
+  }
+  dom.reminderGuideMethods.hidden = true;
+  dom.reminderGuideHint.textContent = message;
+  closeReminderGuide(1600);
+  state.upcomingSig = "";
+  tick();
+}
+
+// 非 iOS Safari：.ics 下载后弹「通过日历打开」提示
+function showIcsHint() {
+  dom.reminderIcsHint.hidden = false;
+}
+function closeIcsHint() {
+  dom.reminderIcsHint.hidden = true;
+}
+
+// 点击班次：已设→取消（金黄移除）；未设→按默认方式设置（首次先问）
+function handleTripReminderClick(trip, dateStr) {
+  const already = hasReminder(dateStr, trip.route, trip.dep);
+  if (already) {
+    unsetReminder(dateStr, trip.route, trip.dep);
+    dom.reminderGuideText.textContent = "已取消该班次的抢票提醒。";
+    dom.reminderGuideYes.hidden = true;
+    dom.reminderGuideNo.hidden = true;
+    dom.reminderGuideMethods.hidden = true;
+    dom.reminderGuideHint.textContent = "";
+    dom.reminderGuide.hidden = false;
+    closeReminderGuide(1400);
+    state.upcomingSig = "";
+    tick();
+    return;
+  }
+  const pref = readPref();
+  if (!pref.askedOnce) {
+    promptReminder(trip);
+    return;
+  }
+  // 只问一次后：按默认方式直接设置
+  applyReminder(trip, pref.method, dateStr);
+}
+
+function renderReminderSettings() {
+  const pref = readPref();
+  dom.reminderEnabled.checked = pref.askedOnce;
+  dom.reminderMethodCalendar.checked = pref.method === "calendar";
+  dom.reminderMethodPwa.checked = pref.method === "pwa";
+  dom.reminderMethodBoth.checked = pref.method === "both";
+  const pwa = isPwa();
+  dom.reminderMethodPwa.disabled = !pwa;
+  dom.reminderMethodBoth.disabled = !pwa;
+  dom.reminderMethodPwaWrap.classList.toggle("is-disabled", !pwa);
+  dom.reminderMethodBothWrap.classList.toggle("is-disabled", !pwa);
+  dom.reminderSettingsHint.textContent = pwa ? "" : "未安装为 PWA，PWA 提醒不可用";
+}
+
+function bindTripReminder() {
+  const container = document.getElementById("tripColumns");
+  if (!container) return;
+  container.addEventListener("click", (e) => {
+    const li = e.target.closest("li.trip-item");
+    if (!li) return;
+    if (e.target.closest("a, button, .trip-item__avail")) return;
+    handleTripReminderClick({ route: li.dataset.route, dep: li.dataset.dep }, viewDateStr());
+  });
+}
+
+function bindReminderGuide() {
+  dom.reminderGuideYes.addEventListener("click", () => showReminderMethods());
+  dom.reminderGuideNo.addEventListener("click", () => {
+    savePref({ askedOnce: false, method: readPref().method });
+    dom.reminderGuideYes.hidden = false;
+    dom.reminderGuideNo.hidden = false;
+    dom.reminderGuideHint.textContent = "已关闭；可在顶部 🔔 设置提醒中重新开启";
+    closeReminderGuide(1600);
+  });
+  dom.reminderGuideMethods.addEventListener("click", (e) => {
+    const btn = e.target.closest(".reminder-method");
+    if (!btn || !pendingReminderTrip) return;
+    const method = btn.dataset.method;
+    savePref({ askedOnce: true, method });
+    applyReminder(pendingReminderTrip, method, viewDateStr());
+  });
+}
+
+function bindReminderSettings() {
+  dom.reminderBtn.addEventListener("click", () => {
+    renderReminderSettings();
+    dom.reminderSettings.hidden = false;
+  });
+  dom.reminderSettingsClose.addEventListener("click", () => {
+    dom.reminderSettings.hidden = true;
+  });
+  const persist = () => {
+    const method = dom.reminderMethodPwa.checked && isPwa() ? "pwa"
+      : dom.reminderMethodBoth.checked && isPwa() ? "both"
+      : dom.reminderMethodCalendar.checked ? "calendar"
+      : "calendar";
+    savePref({ askedOnce: dom.reminderEnabled.checked, method });
+    renderReminderSettings();
+  };
+  dom.reminderEnabled.addEventListener("change", persist);
+  for (const r of [dom.reminderMethodCalendar, dom.reminderMethodPwa, dom.reminderMethodBoth]) {
+    r.addEventListener("change", persist);
+  }
+}
+
+function bindReminderIcsHint() {
+  dom.reminderIcsHintDismiss.addEventListener("click", () => {
+    dismissIcsHint();
+    closeIcsHint();
+  });
+  dom.reminderIcsHintClose.addEventListener("click", () => closeIcsHint());
+}
+
+function bindReminderOverlay() {
+  for (const overlay of [dom.reminderGuide, dom.reminderSettings, dom.reminderIcsHint]) {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.hidden = true;
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!dom.reminderGuide.hidden) dom.reminderGuide.hidden = true;
+    if (!dom.reminderSettings.hidden) dom.reminderSettings.hidden = true;
+    if (!dom.reminderIcsHint.hidden) dom.reminderIcsHint.hidden = true;
+  });
+}
+
 /* ===== Init ===== */
 hideXishanUi();
 bindTheme();
@@ -905,6 +1200,11 @@ bindDetailToggle();
 bindAmapQr();
 bindDateNav();
 bindRefreshBtn();
+bindTripReminder();
+bindReminderGuide();
+bindReminderSettings();
+bindReminderIcsHint();
+bindReminderOverlay();
 initAvailBridge();
 initTraffic((data) => {
   state.trafficLive = data;
@@ -927,6 +1227,9 @@ if (initQQBrowserGuide()) {
 applyView();
 tick();
 setInterval(tick, 1000);
+
+
+
 
 
 
