@@ -1,4 +1,4 @@
-const CACHE_NAME = "bitbus-static-v20260904-18";
+const CACHE_NAME = "bitbus-static-v20260904-19";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -87,6 +87,7 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
 
 
 
