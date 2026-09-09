@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-19";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-20";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260904-19";
-import { now, syncClock } from "./lib/time.js?v=20260904-19";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-19";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-19";
+} from "./lib/schedule.js?v=20260904-20";
+import { now, syncClock } from "./lib/time.js?v=20260904-20";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260904-20";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-20";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -27,8 +27,8 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-19";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-19";
+} from "./lib/availability.js?v=20260904-20";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-20";
 import {
   readPref,
   savePref,
@@ -49,7 +49,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260904-19";
+} from "./lib/reminder.js?v=20260904-20";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -127,6 +127,7 @@ const state = {
   fidsSig: "",
   fidsAutoScroll: false,
   viewDate: null, // null=跟随真实今天；否则 'YYYY-MM-DD'
+  displayDate: null, // 实际展示日期（末班后=明日；avail 数据 date 以它为准）
   availMap: new Map(), // `${route}|${dep}` → avail
   traffic: null,
   trafficLive: null
@@ -147,6 +148,16 @@ function beijingTodayStr() {
 
 function viewDateStr() {
   return state.viewDate || beijingTodayStr();
+}
+
+// 「即将开行」实际展示日期：末班后自动切到明日时 displayDate 由 tick 设为明日，
+// avail 数据拉取/键都用它，避免显示明日班次却拿今日余票导致错位（售罄/旧值）。
+function displayDateStr() {
+  return state.displayDate || viewDateStr();
+}
+
+function dateStrOf(date) {
+  return new Date(date.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
 function dateFromStr(s) {
@@ -677,7 +688,7 @@ function updateTripAvail(li, trip) {
   const avEl = li.querySelector('[data-role="avail"]');
   const lEl = li.querySelector('[data-role="avail-l"]');
   if (!avEl) return;
-  const key = `${viewDateStr()}|${trip.route}|${trip.dep}`;
+  const key = `${displayDateStr()}|${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
   const view = mainAvailText({ ...trip, avail: a });
   if (!view) {
@@ -752,7 +763,7 @@ function renderUpcoming(all, now) {
     renderList(lists[id], trips, now, true);
   }
   // 逐车拉取余票：最近班次优先；stale-while-revalidate（立刻返缓存，过期后台刷）
-  const d = viewDateStr();
+  const d = displayDateStr();
   refreshUpcoming(d, list, (route, dep, tripData) => {
     state.availMap.set(`${d}|${route}|${dep}`, tripData);
     const row = [...dom.tripListA.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListC.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListD.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListE.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`)];
@@ -886,6 +897,8 @@ function tick() {
   const nowDate = new Date(n);
   const todayStr = beijingTodayStr();
   const display = state.viewDate ? { trips: activeTrips(dateFromStr(state.viewDate)), refDate: dateFromStr(state.viewDate) } : activeTripsForNow();
+  // 记录「即将开行」实际展示日期，供 avail 拉取/键使用（末班后=明日，避免拿今日旧值）
+  state.displayDate = display.refDate ? dateStrOf(display.refDate) : null;
   const displayAll = computeForDate(display.trips, n, display.refDate);
   const todayAll = computeForDate(activeTrips(nowDate), n, nowDate);
   dom.clock.textContent = formatClock(nowDate);
@@ -1233,6 +1246,7 @@ if (initQQBrowserGuide()) {
 applyView();
 tick();
 setInterval(tick, 1000);
+
 
 
 
