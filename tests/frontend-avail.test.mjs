@@ -41,8 +41,9 @@ test("mainAvailText: 售罄（available=0 或 bookable<=0）→ 售罄红", () =
   });
 });
 
-test("mainAvailText: 彩虹不显示 / 无 avail 返回 null", () => {
-  assert.equal(mainAvailText({ avail: avail({ rainbow: true, available: 10, total: 51 }) }), null);
+test("mainAvailText: 彩虹恒显示占位 -- / 无 avail 返回 null", () => {
+  assert.deepEqual(mainAvailText({ avail: avail({ rainbow: true, available: 10, total: 51 }) }), { value: "--", color: "" });
+  assert.deepEqual(mainAvailText({ rainbow: true, avail: null }), { value: "--", color: "" });
   assert.equal(mainAvailText({}), null);
   assert.equal(mainAvailText({ avail: null }), null);
 });
@@ -55,8 +56,8 @@ test("pidsAvailText: 满载率 = 100 − pct（整数），颜色按真实余票
   assert.deepEqual(s, { text: "100%", color: "red" });
 });
 
-test("pidsAvailText: 无数据 / 彩虹 → 占位 —", () => {
-  assert.deepEqual(pidsAvailText({ avail: null }), { text: "—", color: "" });
-  assert.deepEqual(pidsAvailText({}), { text: "—", color: "" });
-  assert.deepEqual(pidsAvailText({ avail: avail({ rainbow: true, pct: 50 }) }), { text: "—", color: "" });
+test("pidsAvailText: 无数据 / 彩虹 → 占位 --（两个连字符）", () => {
+  assert.deepEqual(pidsAvailText({ avail: null }), { text: "--", color: "" });
+  assert.deepEqual(pidsAvailText({}), { text: "--", color: "" });
+  assert.deepEqual(pidsAvailText({ avail: avail({ rainbow: true, pct: 50 }) }), { text: "--", color: "" });
 });

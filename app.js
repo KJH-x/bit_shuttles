@@ -1,4 +1,4 @@
-import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-22";
+import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-23";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260910-22";
-import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-22";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260910-22";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-22";
+} from "./lib/schedule.js?v=20260910-23";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-23";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-23";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-23";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -28,8 +28,8 @@ import {
   tripAgeMs,
   availAgeMs,
   fetchHistoryDates
-} from "./lib/availability.js?v=20260910-22";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-22";
+} from "./lib/availability.js?v=20260910-23";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-23";
 import {
   readPref,
   savePref,
@@ -38,6 +38,8 @@ import {
   setReminder,
   unsetReminder,
   reminderMethodOf,
+  hasBeenAsked,
+  markAsked,
   isPwa,
   isIosSafari,
   notificationSupported,
@@ -50,7 +52,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260910-22";
+} from "./lib/reminder.js?v=20260910-23";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -337,6 +339,25 @@ function renderTrafficNote(now) {
     note.hidden = false;
   } else {
     note.hidden = true;
+  }
+}
+
+// 高德跳转按钮实时耗时：`良乡 → 中关村(54分)`（半角括号 + 分钟，超 1 小时仍用分钟，不加「时」）。
+// 与路况条同源同新鲜度（realtimeDurMin 过期/无数据 → 回退纯文字）。
+const AMAP_BTN_ROUTES = ["a", "c"];
+
+function renderAmapDuration() {
+  const n = now();
+  for (let i = 0; i < dom.amapButtons.length; i++) {
+    const btn = dom.amapButtons[i];
+    if (!btn) continue;
+    const route = AMAP_BTN_ROUTES[i];
+    if (!route) continue;
+    if (!btn.dataset.baseLabel) btn.dataset.baseLabel = btn.textContent.trim();
+    const base = btn.dataset.baseLabel;
+    const dur = realtimeDurMin(state.trafficLive, route, n);
+    const label = dur != null ? `${base}(${Math.round(dur)}分)` : base;
+    if (btn.textContent !== label) btn.textContent = label;
   }
 }
 
@@ -770,13 +791,21 @@ function updateTripAvail(li, trip) {
   const key = `${displayDateStr()}|${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
   const view = mainAvailText({ ...trip, avail: a });
+  const clearLabel = () => { if (lEl) { lEl.textContent = ""; lEl.className = "trip-item__avail-l"; } };
   if (!view) {
     avEl.textContent = "";
     avEl.className = "trip-item__avail";
-    if (lEl) { lEl.textContent = ""; lEl.className = "trip-item__avail-l"; }
+    clearLabel();
     return;
   }
-  avEl.className = `trip-item__avail avail--${view.color}`;
+  // 彩虹/占位 "--"：小号灰色，不显示「余」标签与数据龄
+  if (view.value === "--") {
+    avEl.className = "trip-item__avail avail--none";
+    clearLabel();
+    avEl.innerHTML = '<span class="trip-item__avail-n">--</span>';
+    return;
+  }
+  avEl.className = view.color ? `trip-item__avail avail--${view.color}` : "trip-item__avail";
   const ageMs = tripAgeMs(trip.route, trip.dep, displayDateStr()) ?? availAgeMs();
   const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
   // 售罄不显示「余」（置于 row1 行右侧）；数字+数据龄留在 avail 块
@@ -913,7 +942,7 @@ function fidsRowHtml(trip, now) {
   const pct = st.phase === "dep" ? Math.round(trip.progress * 100) : 0;
   const parts = fidsLocParts(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
   return `
-    <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" data-dep="${escapeHtml(trip.dep)}" style="--pct:${pct}%">
+    <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" data-rainbow="${trip.rainbow}" data-dep="${escapeHtml(trip.dep)}" style="--pct:${pct}%">
       <span class="fids-row__arrow fids-row__arrow--l" aria-hidden="true">${FIDS_ARROW_L[trip.route] || ""}</span>
       <span class="fids-row__arrow fids-row__arrow--r" aria-hidden="true">${FIDS_ARROW_R[trip.route] || ""}</span>
       <span class="fids-row__dir">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
@@ -1007,6 +1036,7 @@ function tick() {
   renderFids(todayAll, n);
   renderHistoryPanel();
   renderTrafficNote(n);
+  renderAmapDuration();
   renderDateNav();
   if (state.fidsAutoScroll) {
     autoScrollFids();
@@ -1160,6 +1190,7 @@ function closeReminderGuide(delayMs) {
 }
 
 function promptReminder(trip) {
+  markAsked(); // 引导只询问一次（此后不再弹「触发了抢票提醒」）
   pendingReminderTrip = trip;
   dom.reminderGuideText.textContent = "你刚刚触发了「添加抢票提醒功能」，是否要保留此功能？";
   dom.reminderGuideYes.hidden = false;
@@ -1260,11 +1291,12 @@ function handleTripReminderClick(trip, dateStr) {
     return;
   }
   const pref = readPref();
-  if (!pref.askedOnce) {
-    promptReminder(trip);
+  if (!hasBeenAsked()) {
+    promptReminder(trip); // 首次：询问 1 次并记住
     return;
   }
-  // 只问一次后：按默认方式直接设置
+  // 已询问过：启用则按默认方式直接设置；未启用（设置之后不提醒）→ 点击无反应
+  if (!pref.askedOnce) return;
   applyReminder(trip, pref.method, dateStr);
 }
 

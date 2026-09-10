@@ -17,6 +17,7 @@ globalThis.window = { matchMedia: () => ({ matches: false }) };
 
 const {
   PREF_KEY,
+  ASKED_KEY,
   REMINDERS_KEY,
   ICS_DISMISS_KEY,
   DEFAULT_OFFSET_MIN,
@@ -26,6 +27,8 @@ const {
   MAX_REMINDERS,
   readPref,
   savePref,
+  hasBeenAsked,
+  markAsked,
   readReminders,
   hasReminder,
   setReminder,
@@ -75,6 +78,18 @@ test("savePref/readPref: 往返一致且写入 PREF_KEY", () => {
   savePref({ askedOnce: true, method: "both" });
   assert.equal(store.get(PREF_KEY), JSON.stringify({ askedOnce: true, method: "both" }));
   assert.deepEqual(readPref(), { askedOnce: true, method: "both" });
+});
+
+test("一次性引导：markAsked 持久化；已配置过（askedOnce）视为已询问", () => {
+  store.clear();
+  assert.equal(hasBeenAsked(), false);
+  markAsked();
+  assert.equal(hasBeenAsked(), true);
+  assert.equal(store.get(ASKED_KEY), "1");
+  // 兼容旧用户：仅 pref.askedOnce=true 而无 ASKED_KEY 也视为已询问（不重复弹引导）
+  store.clear();
+  savePref({ askedOnce: true, method: "calendar" });
+  assert.equal(hasBeenAsked(), true);
 });
 
 test("reminders: set/read/has/unset 按 日期|route|dep 独立（可多选）", () => {

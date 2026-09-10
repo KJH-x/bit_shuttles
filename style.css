@@ -1334,6 +1334,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
   content: "";
   position: absolute;
   inset: 0;
+  left: 0;
+  right: auto;
   width: var(--pct, 0%);
   background: color-mix(in srgb, var(--dir-a) 18%, transparent);
   pointer-events: none;
@@ -1344,8 +1346,11 @@ section[aria-labelledby="runningTitle"] .panel__head {
   background: color-mix(in srgb, var(--dir-a) 18%, transparent);
 }
 
+/* rev（c/e，中关村/西山发车）：进度从右往左累加（与运行详情 .running-item 一致） */
 .fids-row--run[data-route="c"]::before {
   background: color-mix(in srgb, var(--dir-c) 18%, transparent);
+  left: auto;
+  right: 0;
 }
 
 .fids-row--run[data-route="d"]::before {
@@ -1354,6 +1359,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .fids-row--run[data-route="e"]::before {
   background: color-mix(in srgb, var(--dir-e) 18%, transparent);
+  left: auto;
+  right: 0;
 }
 
 .fids-row--run[data-rainbow="true"]::before {
@@ -1423,6 +1430,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-size: .82rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  font-variant-ligatures: none; /* 保持 "--" 两个独立连字符，不合并为 — */
   text-align: center;
 }
 
@@ -1631,15 +1639,19 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .trip-item__row1 {
   grid-area: row1;
+  position: relative; /* 「余」标签右下角定位基准 */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-/* 「余」标签：置于 row1 行内，独自右对齐（margin-left:auto 推向其右侧） */
+/* 「余」标签：绝对定位于 row1 右下角（脱离 flex 流，不影响行高），不占位不换行 */
 .trip-item__row1 .trip-item__avail-l {
-  margin-left: auto;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
   font-size: .95rem;
   font-weight: 700;
   line-height: 1;
@@ -1718,6 +1730,13 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-weight: 800;
   line-height: 1;
   color: var(--muted);
+  font-variant-ligatures: none; /* 保持 "--" 两个独立连字符 */
+}
+
+/* 彩虹/无数据占位 "--"：小号灰色 */
+.trip-item__avail.avail--none .trip-item__avail-n {
+  font-size: .95rem;
+  font-weight: 700;
 }
 
 .trip-item__avail-ttl {
