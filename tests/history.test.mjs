@@ -11,7 +11,9 @@ import {
   readTripCache,
   writeLastFailed,
   rollupExpiredSnapshots,
-  trafficForToday
+  trafficForToday,
+  readLoadCumulative,
+  listSnapshotDates
 } from "../functions/_shared/history.js";
 import { emptyCumulative, foldInto, dayAvgRatio } from "../functions/_shared/metrics.js";
 
@@ -122,4 +124,41 @@ test("trafficForToday: 有累计 → 输出红/绿箭头", async () => {
   assert.equal(t.color, "red");
   assert.ok(Math.abs(t.baseRatio - 0.5) < 1e-9);
   assert.equal(t.todayRatio, 10 / 51);
+});
+
+test("writeSnapshot: 空快照不覆盖已有非空快照（防空污染）", async () => {
+  const b = memoryBucket();
+  await writeSnapshot(b, "2026-09-04", [{ route: "a", dep: "07:30", available: 10, total: 51 }]);
+  await writeSnapshot(b, "2026-09-04", []);
+  const snap = await readSnapshot(b, "2026-09-04");
+  assert.equal(snap.trips.length, 1, "空快照不应覆盖非空快照");
+  // 无既有快照时允许写空（记录当日无数据）
+  await writeSnapshot(b, "2026-09-05", []);
+  assert.equal((await readSnapshot(b, "2026-09-05")).trips.length, 0);
+});
+
+test("rollupExpiredSnapshots: 同步折入座位加权满载率累计（load-cumulative.json）", async () => {
+  const b = memoryBucket();
+  // 8 天前（工作日）：两趟 50 座，一趟满员一趟半满 → sumUsed=75, sumTotal=100
+  await writeSnapshot(b, "2026-08-27", [
+    { route: "a", dep: "07:30", paid: true, available: 0, bookable: 0, total: 50 },
+    { route: "a", dep: "08:00", paid: true, available: 25, bookable: 25, total: 50 }
+  ]);
+  await rollupExpiredSnapshots(b, "2026-09-04");
+  const loadCum = await readLoadCumulative(b);
+  assert.equal(loadCum.weekday.days, 1);
+  assert.equal(loadCum.weekday.sumUsed, 75);
+  assert.equal(loadCum.weekday.sumTotal, 100);
+});
+
+test("listSnapshotDates: 仅列 < 今日、降序、带 hasTrips", async () => {
+  const b = memoryBucket();
+  await writeSnapshot(b, "2026-09-04", [{ route: "a", dep: "07:30", available: 10, total: 51 }]);
+  await writeSnapshot(b, "2026-09-05", []); // 空快照
+  await writeSnapshot(b, "2026-09-09", [{ route: "a", dep: "07:30", available: 10, total: 51 }]);
+  const dates = await listSnapshotDates(b, "2026-09-09"); // 今日 09-09 不入列
+  assert.deepEqual(dates, [
+    { date: "2026-09-05", hasTrips: false },
+    { date: "2026-09-04", hasTrips: true }
+  ]);
 });

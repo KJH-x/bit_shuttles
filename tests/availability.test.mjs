@@ -92,3 +92,14 @@ test("computeTrip: 付费 TTL 阶段随 now 变化（开售瞬间 20s / 常规 6
     assert.equal(t.ttl, c.ttl, `at ${c.at}`);
   }
 });
+
+test("computeTrip: 输出源站 id 与格式化 price（未来实车列表驱动用）", () => {
+  const row = { ...ROW, id: "abc123" };
+  const t = computeTrip(row, seat(), NOW, DATE, true);
+  assert.equal(t.id, "abc123");
+  assert.equal(t.price, "¥10.00");
+  const free = computeTrip({ ...ROW, teacher_ticket_price: "0.0" }, seat(), NOW, DATE, true);
+  assert.equal(free.price, "¥0.00");
+  // 老行无 id → 空串（不崩溃）
+  assert.equal(computeTrip({ ...ROW, id: undefined }, seat(), NOW, DATE, true).id, "");
+});

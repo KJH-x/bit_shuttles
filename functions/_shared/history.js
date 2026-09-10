@@ -12,7 +12,10 @@ import {
   groupOf,
   cumulativeAvg,
   trafficView,
-  shiftDate
+  shiftDate,
+  dayLoadSeatWeighted,
+  foldLoadInto,
+  emptyLoadCumulative
 } from "./metrics.js";
 
 export const SNAPSHOT_PREFIX = "avail/";
@@ -20,6 +23,7 @@ export const LIVE_PREFIX = "avail/live/";
 export const META_PREFIX = "avail/meta/";
 export const TRIP_PREFIX = "avail/trip/";
 export const CUMULATIVE_KEY = "avail/cumulative.json";
+export const LOAD_CUMULATIVE_KEY = "avail/load-cumulative.json";
 export const LAST_FAILED_KEY = "avail/last-failed.json";
 const SNAPSHOT_KEEP_DAYS = 7;
 const DATE_RE = /^avail\/(\d{4}-\d{2}-\d{2})\.json$/;
@@ -40,7 +44,12 @@ async function writeJson(bucket, key, data) {
 }
 
 export async function writeSnapshot(bucket, date, trips) {
-  await writeJson(bucket, `${SNAPSHOT_PREFIX}${date}.json`, { date, savedAt: Date.now(), trips });
+  // 防空污染：空快照（源站偶发空列表）不覆盖已存在的非空快照，避免把有效历史覆盖成空。
+  if (!Array.isArray(trips) || trips.length === 0) {
+    const existing = await readSnapshot(bucket, date);
+    if (existing && existing.trips && existing.trips.length > 0) return existing;
+  }
+  await writeJson(bucket, `${SNAPSHOT_PREFIX}${date}.json`, { date, savedAt: Date.now(), trips: trips || [] });
 }
 
 export async function readSnapshot(bucket, date) {
@@ -80,13 +89,19 @@ export async function readCumulative(bucket) {
   return cum && cum.weekday ? cum : emptyCumulative();
 }
 
+export async function readLoadCumulative(bucket) {
+  const cum = await readJson(bucket, LOAD_CUMULATIVE_KEY);
+  return cum && cum.weekday ? cum : emptyLoadCumulative();
+}
+
 export async function writeLastFailed(bucket, { date, error, attempts }) {
   await writeJson(bucket, LAST_FAILED_KEY, { at: Date.now(), date, error, attempts });
 }
 
-// 将超过保留期的旧快照折入累计（按天数加权）并删除；只保留最近 7 天。
+// 将超过保留期的旧快照折入累计（客流比例 + 满载率座位加权）并删除；只保留最近 7 天。
 export async function rollupExpiredSnapshots(bucket, todayStr) {
   let cum = await readCumulative(bucket);
+  let loadCum = await readLoadCumulative(bucket);
   let cursor;
   const cutoff = shiftDate(todayStr, -SNAPSHOT_KEEP_DAYS); // 严格早于此的才折入
   do {
@@ -101,12 +116,37 @@ export async function rollupExpiredSnapshots(bucket, todayStr) {
       if (snap && snap.trips) {
         const ratio = dayAvgRatio(snap.trips);
         cum = foldInto(cum, date, ratio);
+        loadCum = foldLoadInto(loadCum, date, dayLoadSeatWeighted(snap.trips));
       }
       await bucket.delete(obj.key);
     }
   } while (cursor);
   await writeJson(bucket, CUMULATIVE_KEY, cum);
+  await writeJson(bucket, LOAD_CUMULATIVE_KEY, loadCum);
   return cum;
+}
+
+// 列出有历史快照的日期（< 今日），降序；hasTrips=false 表示快照存在但为空（当日源站无数据）。
+export async function listSnapshotDates(bucket, todayStr) {
+  const keys = [];
+  let cursor;
+  do {
+    const listed = await bucket.list({ prefix: SNAPSHOT_PREFIX, cursor });
+    cursor = listed.cursor;
+    for (const obj of listed.objects) {
+      const m = DATE_RE.exec(obj.key);
+      if (!m) continue;
+      if (m[1] < todayStr) keys.push(m[1]);
+    }
+  } while (cursor);
+  keys.sort();
+  keys.reverse();
+  const out = [];
+  for (const date of keys) {
+    const snap = await readSnapshot(bucket, date);
+    out.push({ date, hasTrips: !!(snap && snap.trips && snap.trips.length > 0) });
+  }
+  return out;
 }
 
 // 今日客流对比：与同期（同工作日/周末）历史平均比较，输出红/绿上下箭头数据。

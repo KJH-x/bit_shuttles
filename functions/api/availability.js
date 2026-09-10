@@ -16,6 +16,8 @@ import {
   freeTtl,
   isVisible,
   applyVisibility,
+  historyTripView,
+  futureDayTtl,
   minTtl,
   NAME_TO_ROUTE
 } from "../_shared/ttl.js";
@@ -30,9 +32,11 @@ import {
   writeTripCache,
   rollupExpiredSnapshots,
   trafficForToday,
-  writeLastFailed
+  writeLastFailed,
+  readLoadCumulative
 } from "../_shared/history.js";
-import { shiftDate } from "../_shared/metrics.js";
+import { shiftDate, dayLoadSeatWeighted, cumulativeLoadAvg } from "../_shared/metrics.js";
+import { inferScheduleKind } from "../../lib/holidays.js";
 
 const MAX_ATTEMPTS = 3;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,6 +47,11 @@ const ROUTES_OK = new Set(["a", "c", "d", "e"]);
 
 function makeSchoolUrls(path, schemeOrder) {
   return host(schemeOrder).map((h) => h + path);
+}
+
+function fmtPrice(row) {
+  const t = Number(row.teacher_ticket_price ?? 0);
+  return t > 0 ? `¥${t.toFixed(2)}` : "¥0.00";
 }
 
 // 单趟计算：available = reservation_num − disable_seat 数；total = reserved + reservation_num − disable
@@ -66,7 +75,7 @@ export function computeTrip(row, seatData, nowMs, date, isToday) {
   const available = paid && !visible ? null : availableRaw;
   const pct = availableRaw != null && total > 0 ? Math.round((availableRaw / total) * 100) : null;
   // bookable=原始余票（未 clamp，缓存用，供 applyVisibility 重算）；negative 表示售罄
-  return { route, dep, name: row.name, paid, rainbow, phase, ttl, visible, available, bookable, total, pct };
+  return { id: String(row.id ?? ""), route, dep, name: row.name, price: fmtPrice(row), paid, rainbow, phase, ttl, visible, available, bookable, total, pct };
 }
 
 // 批量刷新今日：get-list + 逐趟 get-reserved-seats → 写 trip 缓存 + live 缓存 + 快照 + 客流
@@ -113,6 +122,11 @@ async function refreshAll(env, secret, schemeOrder, date, nowMs, isToday) {
     })
     .filter(Boolean);
 
+  // 源站实车推断当天时刻表类型（调休/节假日自动正确；无数据或命中率低→null 交静态兜底）
+  const scheduleKind = inferScheduleKind(
+    relevant.map((r) => ({ route: NAME_TO_ROUTE[r.name], dep: r.origin_time }))
+  );
+
   // 写 trip 缓存
   await Promise.all(
     trips.map((t) => writeTripCache(bucket, date, t.route, t.dep, t))
@@ -122,16 +136,21 @@ async function refreshAll(env, secret, schemeOrder, date, nowMs, isToday) {
   let traffic = null;
   if (isToday) traffic = await trafficForToday(bucket, beijingDateStr(nowMs), trips);
 
-  const ttlList = trips.map((t) => (t.ttl == null ? null : t.ttl));
-  const mTtl = minTtl(ttlList) || LIVE_DEFAULT_TTL;
-  await writeLiveCache(bucket, date, { minTtl: mTtl, traffic, trips });
+  // 整份 TTL：未来日期用「日级 TTL」（1 天 / 1 小时，见 futureDayTtl），今日沿用相位最小 TTL
+  let mTtl = minTtl(ttlList(trips)) || LIVE_DEFAULT_TTL;
+  if (!isToday) mTtl = futureDayTtl(nowMs, date) || mTtl;
+  await writeLiveCache(bucket, date, { minTtl: mTtl, traffic, scheduleKind, trips });
 
   if (isToday) {
-    const snapTrips = trips.map((t) => ({ route: t.route, dep: t.dep, available: t.available, total: t.total }));
+    const snapTrips = trips.map((t) => ({ id: t.id, name: t.name, route: t.route, dep: t.dep, paid: t.paid, rainbow: t.rainbow, available: t.available, bookable: t.bookable, total: t.total, pct: t.pct }));
     await writeSnapshot(bucket, date, snapTrips);
     await rollupExpiredSnapshots(bucket, beijingDateStr(nowMs));
   }
-  return { trips, traffic, mTtl };
+  return { trips, traffic, mTtl, scheduleKind };
+}
+
+function ttlList(trips) {
+  return trips.map((t) => (t.ttl == null ? null : t.ttl));
 }
 
 // 单趟刷新：源站 get-reserved-seats → 写 trip 缓存，返回该趟数据
@@ -178,11 +197,21 @@ export async function onRequest({ request, env, waitUntil }) {
   const isToday = date === todayStr;
   const isPast = date < todayStr;
 
-  // === 历史日期：返回快照 ===
+  // === 历史日期：返回快照（历史口径，不套 3h 窗口）+ 满载率统计 ===
   if (isPast) {
     const snap = await readSnapshot(bucket, date);
+    const trips = (snap ? snap.trips : []).map(historyTripView);
+    const day = dayLoadSeatWeighted(trips);
+    const loadCum = await readLoadCumulative(bucket);
+    const stats = {
+      day: { tripCount: trips.length, sumUsed: day.sumUsed, sumTotal: day.sumTotal, loadRatio: day.ratio },
+      cumulative: {
+        weekday: { days: loadCum.weekday.days, loadRatio: cumulativeLoadAvg(loadCum, "weekday") },
+        weekend: { days: loadCum.weekend.days, loadRatio: cumulativeLoadAvg(loadCum, "weekend") }
+      }
+    };
     return json(
-      { serverNow: nowMs, date, minTtl: 300, source: "snapshot", traffic: null, trips: snap ? snap.trips : [] },
+      { serverNow: nowMs, date, minTtl: 300, source: "snapshot", traffic: null, trips, stats },
       200,
       cacheHeaders(300)
     );
@@ -257,9 +286,11 @@ export async function onRequest({ request, env, waitUntil }) {
   }
 
   // === 批量模式（PIDS / 日期切换）===
+  const isFuture = date > todayStr;
   const live = await readLiveCache(bucket, date);
   if (live && Array.isArray(live.trips)) {
-    const ttl = live.minTtl != null && live.minTtl > 0 ? live.minTtl : LIVE_DEFAULT_TTL;
+    let ttl = live.minTtl != null && live.minTtl > 0 ? live.minTtl : LIVE_DEFAULT_TTL;
+    if (isFuture) ttl = futureDayTtl(nowMs, date) || ttl;
     const fresh = live.fetchedAt != null && nowMs - live.fetchedAt < ttl * 1000;
     if (!fresh) {
       waitUntil(
@@ -273,7 +304,7 @@ export async function onRequest({ request, env, waitUntil }) {
       );
     }
     return json(
-      { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", dataFetchedAt: typeof live.fetchedAt === "number" ? live.fetchedAt : nowMs, traffic: live.traffic || null, trips: live.trips.map((t) => applyVisibility(t, nowMs, date)) },
+      { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", dataFetchedAt: typeof live.fetchedAt === "number" ? live.fetchedAt : nowMs, traffic: live.traffic || null, scheduleKind: live.scheduleKind || null, trips: live.trips.map((t) => applyVisibility(t, nowMs, date)) },
       200,
       cacheHeaders(ttl)
     );
@@ -281,9 +312,9 @@ export async function onRequest({ request, env, waitUntil }) {
 
   // 无 live 缓存：同步批量查一次
   try {
-    const { trips, traffic, mTtl } = await refreshAll(env, secret, schemeOrder, date, nowMs, isToday);
+    const { trips, traffic, mTtl, scheduleKind } = await refreshAll(env, secret, schemeOrder, date, nowMs, isToday);
     return json(
-      { serverNow: nowMs, date, minTtl: mTtl, source: "live", dataFetchedAt: nowMs, traffic, trips: trips.map((t) => applyVisibility(t, nowMs, date)) },
+      { serverNow: nowMs, date, minTtl: mTtl, source: "live", dataFetchedAt: nowMs, traffic, scheduleKind, trips: trips.map((t) => applyVisibility(t, nowMs, date)) },
       200,
       cacheHeaders(mTtl)
     );
@@ -291,7 +322,7 @@ export async function onRequest({ request, env, waitUntil }) {
     waitUntil(
       writeLastFailed(bucket, { date, error: String((err && err.message) || err), attempts: MAX_ATTEMPTS }).catch(() => {})
     );
-    return json({ serverNow: nowMs, date, minTtl: 60, source: "degraded", traffic: null, trips: [] }, 200, cacheHeaders(60));
+    return json({ serverNow: nowMs, date, minTtl: 60, source: "degraded", traffic: null, scheduleKind: null, trips: [] }, 200, cacheHeaders(60));
   }
 }
 

@@ -1971,3 +1971,67 @@ section[aria-labelledby="runningTitle"] .panel__head {
     display: none;
   }
 }
+
+/* ===== 日期选择器（视觉隐藏 input，showPicker 弹出） ===== */
+.date-nav__picker {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* ===== 历史记录面板 ===== */
+.history-stats {
+  margin: 0 0 12px;
+  font-size: .88rem;
+  color: var(--muted);
+}
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.history-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: .9rem;
+}
+.history-item__route {
+  color: var(--text);
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.history-item__dep {
+  font-weight: 700;
+  color: var(--text);
+}
+.history-item__avail {
+  color: var(--primary);
+  min-width: 3.5em;
+  text-align: right;
+}
+.history-item__load {
+  color: var(--muted);
+  min-width: 3em;
+  text-align: right;
+}
+.history-empty {
+  padding: 24px;
+}
+
