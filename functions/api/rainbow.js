@@ -27,6 +27,7 @@ const TIMEOUT_MS = 8000;
 
 const LIVE_KEY = "rainbow/live.json";
 const COOKIE_KEY = "rainbow/cookie.enc";
+const LEGACY_COOKIE_KEY = "rainbow/cookie.json.enc"; // 容错：旧命名（优先用 COOKIE_KEY）
 const FAILED_KEY = "rainbow/last-failed.json";
 const LIVE_TTL = 300;
 
@@ -38,6 +39,21 @@ async function readJson(bucket, key) {
   } catch {
     return null;
   }
+}
+
+// 读加密信封：优先 rainbow/cookie.enc，回退旧命名；非 JSON 明文时明确报 not_json（便于排查格式错误）
+async function readCookieEnvelope(bucket) {
+  for (const key of [COOKIE_KEY, LEGACY_COOKIE_KEY]) {
+    const obj = await bucket.get(key);
+    if (!obj) continue;
+    const text = await obj.text();
+    try {
+      return { key, envelope: JSON.parse(text) };
+    } catch {
+      throw new Error(`envelope:not_json@${key}`);
+    }
+  }
+  throw new Error("envelope:empty");
 }
 
 async function writeJson(bucket, key, data) {
@@ -113,7 +129,7 @@ async function writeFailed(bucket, stage, err) {
 async function refresh(bucket, env, nowMs) {
   const keyB64 = env.RAINBOW_COOKIE_KEY;
   if (!keyB64) throw new Error("no_key");
-  const envelope = await readJson(bucket, COOKIE_KEY);
+  const { envelope } = await readCookieEnvelope(bucket);
   const parsed = parseEnvelope(envelope, nowMs);
   if (!parsed.ok) throw new Error(`envelope:${parsed.reason}`);
   const cookie = await decryptCookie(keyB64, envelope);
