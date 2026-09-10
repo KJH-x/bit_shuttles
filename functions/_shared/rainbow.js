@@ -61,7 +61,8 @@ export function pickBoardRoutes(routes) {
       name: r.name,
       boardRoute,
       dep: r.first_station_time || r.service_time || null,
-      serviceDate: r.service_date || null
+      serviceDate: r.service_date || null,
+      price: r.presentPrice != null && r.presentPrice !== "" ? r.presentPrice : null
     });
   }
   return out;
@@ -82,6 +83,7 @@ export function buildTrips(routeEntries, plansByRoute, seatsByPlan) {
         name: r.name,
         serviceDate: p.service_date || r.serviceDate || null,
         dep: r.dep,
+        price: r.price != null ? r.price : null,
         seatsTotal: seat.seatsTotal,
         seatsTaken: seat.seatsTaken,
         seatsLeft: seat.seatsLeft

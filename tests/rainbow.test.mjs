@@ -65,9 +65,9 @@ test("mapRouteToBoard: 良乡-中关村→a（早班）、中关村-良乡→c�
   assert.equal(mapRouteToBoard(""), null);
 });
 
-test("pickBoardRoutes: 仅取名称含「理工」且方向可映射且有 id 者", () => {
+test("pickBoardRoutes: 仅取名称含「理工」且方向可映射且有 id 者（含 presentPrice）", () => {
   const routes = [
-    { id: 788, name: "理工01良乡-中关村（首班）", first_station_time: "07:30", service_date: "2026-09-11" },
+    { id: 788, name: "理工01良乡-中关村（首班）", first_station_time: "07:30", service_date: "2026-09-11", presentPrice: "9" },
     { id: 2110, name: "理工03中关村-良乡（首班）", first_station_time: "08:00" },
     { id: 999, name: "某某专线良乡-中关村" }, // 非理工 → 排除
     { id: 1000, name: "理工99西山环线" }, // 方向不可映射 → 排除
@@ -75,13 +75,14 @@ test("pickBoardRoutes: 仅取名称含「理工」且方向可映射且有 id �
   ];
   const out = pickBoardRoutes(routes);
   assert.equal(out.length, 2);
-  assert.deepEqual(out[0], { routesId: 788, name: "理工01良乡-中关村（首班）", boardRoute: "a", dep: "07:30", serviceDate: "2026-09-11" });
+  assert.deepEqual(out[0], { routesId: 788, name: "理工01良乡-中关村（首班）", boardRoute: "a", dep: "07:30", serviceDate: "2026-09-11", price: "9" });
   assert.equal(out[1].boardRoute, "c");
+  assert.equal(out[1].price, null);
 });
 
-test("buildTrips: routes × 今日 plan × seats 组合", () => {
-  const entries = [{ routesId: 788, name: "理工01良乡-中关村（首班）", boardRoute: "a", dep: "07:30", serviceDate: "2026-09-11" }];
-  const plansByRoute = new Map([[788, [{ id: 417302, service_date: "2026-09-11" }]]]);
+test("buildTrips: routes × plan × seats 组合（含 price/serviceDate）", () => {
+  const entries = [{ routesId: 788, name: "理工01良乡-中关村（首班）", boardRoute: "a", dep: "07:30", serviceDate: "2026-09-11", price: "9" }];
+  const plansByRoute = new Map([[788, [{ id: 417302, service_date: "2026-09-14" }]]]);
   const seatsByPlan = new Map([[417302, { seatsTotal: 49, seatsTaken: 49, seatsLeft: 0 }]]);
   const trips = buildTrips(entries, plansByRoute, seatsByPlan);
   assert.equal(trips.length, 1);
@@ -90,8 +91,9 @@ test("buildTrips: routes × 今日 plan × seats 组合", () => {
     planId: 417302,
     boardRoute: "a",
     name: "理工01良乡-中关村（首班）",
-    serviceDate: "2026-09-11",
+    serviceDate: "2026-09-14",
     dep: "07:30",
+    price: "9",
     seatsTotal: 49,
     seatsTaken: 49,
     seatsLeft: 0

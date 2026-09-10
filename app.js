@@ -1,4 +1,4 @@
-import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-29";
+import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-30";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260910-29";
-import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-29";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260910-29";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-29";
+} from "./lib/schedule.js?v=20260910-30";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-30";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-30";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-30";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -28,9 +28,9 @@ import {
   tripAgeMs,
   availAgeMs,
   fetchHistoryDates
-} from "./lib/availability.js?v=20260910-29";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-29";
-import { initRainbow, refreshRainbowNow, rainbowAvailText, rainbowAgeMs } from "./lib/rainbow.js?v=20260910-29";
+} from "./lib/availability.js?v=20260910-30";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-30";
+import { initRainbow, refreshRainbowNow, rainbowAvailText, rainbowAgeMs, rainbowTripsForDate } from "./lib/rainbow.js?v=20260910-30";
 import {
   readPref,
   savePref,
@@ -54,7 +54,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260910-29";
+} from "./lib/reminder.js?v=20260910-30";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -318,14 +318,19 @@ function initRainbowBridge() {
   });
 }
 
-// 展示日班次列表：今日=静态时刻表；未来=源站实车（未发布则空）；历史=空（交给历史面板）。
+// 展示日班次列表：今日=静态时刻表；未来=源站实车 + 彩虹班次（源站不含彩虹）；历史=空（交给历史面板）。
 function viewTripsFor(dateStr) {
   const today = beijingTodayStr();
   if (dateStr === today) return activeTrips(dateFromStr(dateStr));
   if (dateStr > today) {
     const raw = state.futureTrips.get(dateStr);
-    if (!Array.isArray(raw) || raw.length === 0) return [];
-    return raw.map((t) => ({ ...t, id: `f-${t.route}-${t.dep}-${t.id || "x"}` }));
+    const school = Array.isArray(raw) ? raw.map((t) => ({ ...t, id: `f-${t.route}-${t.dep}-${t.id || "x"}` })) : [];
+    const sched = activeTrips(dateFromStr(dateStr));
+    const rainbow = rainbowTripsForDate([...state.rainbowMap.values()], dateStr, (route, dep) => {
+      const st = sched.find((x) => x.route === route && x.dep === dep);
+      return st ? st.price : null;
+    });
+    return [...school, ...rainbow];
   }
   return [];
 }

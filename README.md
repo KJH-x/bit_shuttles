@@ -41,7 +41,7 @@
   - **容错**：源站连接重试 3 次后放弃，失败日志写入 R2（`avail/last-failed.json`），响应降级显示「—」；
   - **历史记录**：R2 每日快照保留 7 天（字段含 route/dep/paid/rainbow/bookable/available/total/pct/name/id），超期折入累计统计（工作日/周末分组，天数加权；满载率另折入座位加权累计）；`GET /api/history/dates` 提供近 7 天有快照的日期列表；
   - **已知待观察（同时车/加开班次）**：源站偶发对同一 (名称, 发车时间) 返回两条记录（同时车）。当前缓存/前端键为 (date, route, dep) 级、无 id，两车数据不可区分（数据竞争覆盖），主屏/PIDS 只展示其中一行；已为 API trips 增加源站 `id` 并随快照持久化以便未来证实，但**暂不改去重行为**——待实际样本出现后再定去重策略（见 `docs/ARCHITECTURE.md` 改动历史 v1.26）。
-- **彩虹巴士余座（`/api/rainbow`）**：Pages Function 读取 R2 加密信封 `rainbow/cookie.enc`（AES-GCM-256，机器 A 用共享 key 加密 `connect.sid` 后 SigV4 上传）→ 解密 → 调彩虹源站 `rainbow-bus.cn`（`routesByArea`(area=3804 理工大学，翻页) → `searchPlanDates`(今日 plan) → `getBusSeatsWechat`(座位图)）→ 解析余座 → R2 `rainbow/live.json`（300s SWR，与余票同款）→ 前端 `lib/rainbow.js`。仅取「理工大学」线路，按名称「良乡-中关村/中关村-良乡」映射板内 a/c 方向。详见 `docs/rainbow-bus-api-investigation.md`。
+- **彩虹巴士余座（`/api/rainbow`）**：Pages Function 读取 R2 加密信封 `rainbow/cookie.enc`（AES-GCM-256，机器 A 用共享 key 加密 `connect.sid` 后 SigV4 上传）→ 解密 → 调彩虹源站 `rainbow-bus.cn`（`routesByArea`(area=3804 理工大学，翻页) → `searchPlanDates`(今日..+5 天 plan) → `getBusSeatsWechat`(座位图)）→ 解析余座 → R2 `rainbow/live.json`（300s SWR，与余票同款）→ 前端 `lib/rainbow.js`。仅取「理工大学」线路，按名称「良乡-中关村/中关村-良乡」映射板内 a/c 方向；**未来班次视图会并入彩虹班次**（school 源不含彩虹）。详见 `docs/rainbow-bus-api-investigation.md`。
 - **数据源界面（勿重复探测）**：BIT 班车预约源站 = `hqapp1.bit.edu.cn`（**仅 http 可达，本机外网 https 直连被拒**）。API 端点：`/vehicle/get-list`、`/vehicle/get-reserved-seats`（见 `functions/_shared/school.js`）。**班次列表用户界面 URL = `http://hqapp1.bit.edu.cn/newbanche/home`**（200，供钉钉跳转/深链使用）。源站无其他 Web UI（`/` 返回纯文本「欢迎访问系统」，`/h5/ /wap/ /vehicle/` 等均 404），仅 API + 客户端界面。
 - **可作为 App 安装（PWA）**：`manifest.webmanifest` 达标（standalone / 图标 / 主题色），浏览器「安装应用」即可添加到桌面。
 - **iOS Safari 安装引导**：iOS 非 PWA 模式打开时，完全加载 5 秒后弹出自定义引导（长按地址栏 → 分享 → 添加到主屏幕，默认作为网页 App 打开）；「知道了」后不再打扰（`localStorage`）。
@@ -80,7 +80,7 @@
 | `wrangler.toml` | Pages 配置：R2 bucket 绑定 `AVAIL_BUCKET`、`ENABLE_XISHAN` 开关（TTL/窗口/阈值常量以代码为唯一事实来源） |
 | `.dev.vars` | 本地开发 secret（`SCHOOL_SECRET` 等，已 gitignore，生产用 Pages 环境变量） |
 | `assets/qr-*.png` | 高德导航静态二维码（桌面扫码） |
-| `tests/` | auto-test（`node --test tests/*.test.mjs`，156 项） |
+| `tests/` | auto-test（`node --test tests/*.test.mjs`，157 项） |
 | `docs/ARCHITECTURE.md` | 架构 / 设计原因 / 改动历史（面向 LLM） |
 | `_headers` | Cloudflare Pages 安全头 / 缓存 |
 | `meta.json` | 站点元数据（X-B4 约定） |

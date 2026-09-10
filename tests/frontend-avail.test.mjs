@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { availColor, mainAvailText, pidsAvailText } from "../lib/availability.js";
-import { rainbowAvailText } from "../lib/rainbow.js";
+import { rainbowAvailText, rainbowTripsForDate } from "../lib/rainbow.js";
 
 // mainAvailText/pidsAvailText 输入形状：trip.avail = computeTrip 输出子集
 function avail({ paid = true, visible = true, available, bookable, total, pct, rainbow = false } = {}) {
@@ -86,4 +86,21 @@ test("rainbowAvailText: 主屏彩虹余座文案（有数据 余N/售罄，无�
   assert.equal(rainbowAvailText(null), null);
   assert.equal(rainbowAvailText({}), null);
   assert.equal(rainbowAvailText({ seatsTotal: 0, seatsLeft: 0 }), null);
+});
+
+test("rainbowTripsForDate: 未来某日彩虹班次 → 展示项（静态价优先，回退实车价）", () => {
+  const trips = [
+    { planId: 1, boardRoute: "a", dep: "07:30", serviceDate: "2026-09-14", price: "9", seatsTotal: 49, seatsLeft: 3 },
+    { planId: 2, boardRoute: "c", dep: "08:00", serviceDate: "2026-09-14", price: "9", seatsTotal: 49, seatsLeft: 0 },
+    { planId: 3, boardRoute: "a", dep: "07:30", serviceDate: "2026-09-15", price: "9", seatsTotal: 49, seatsLeft: 5 }
+  ];
+  const priceOf = (route, dep) => (route === "a" && dep === "07:30" ? "¥10.00" : null);
+  const out = rainbowTripsForDate(trips, "2026-09-14", priceOf);
+  assert.deepEqual(out, [
+    { id: "rb-1", route: "a", dep: "07:30", rainbow: true, price: "¥10.00" },
+    { id: "rb-2", route: "c", dep: "08:00", rainbow: true, price: "¥9.00" }
+  ]);
+  // 其他日期 / 空输入
+  assert.equal(rainbowTripsForDate(trips, "2026-09-16", priceOf).length, 0);
+  assert.equal(rainbowTripsForDate(null, "2026-09-14", priceOf).length, 0);
 });
