@@ -1,4 +1,4 @@
-import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-27";
+import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-28";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260910-27";
-import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-27";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260910-27";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-27";
+} from "./lib/schedule.js?v=20260910-28";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-28";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-28";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-28";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -28,8 +28,8 @@ import {
   tripAgeMs,
   availAgeMs,
   fetchHistoryDates
-} from "./lib/availability.js?v=20260910-27";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-27";
+} from "./lib/availability.js?v=20260910-28";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-28";
 import {
   readPref,
   savePref,
@@ -45,6 +45,7 @@ import {
   notificationSupported,
   notificationGranted,
   ensureNotificationPermission,
+  DEFAULT_OFFSET_MIN,
   icsHintDismissed,
   dismissIcsHint,
   openDingTalk,
@@ -52,7 +53,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260910-27";
+} from "./lib/reminder.js?v=20260910-28";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -1270,7 +1271,14 @@ async function applyReminder(trip, method, dateStr) {
     message = "设置提醒失败，请稍后重试";
   }
   dom.reminderGuideMethods.hidden = true;
-  dom.reminderGuideHint.textContent = message;
+  if (dom.reminderGuide.hidden) {
+    // 直接设置路径（一次性引导之外）：弹出结果反馈 1.6s，避免「点了没反应」
+    dom.reminderGuideText.textContent = message || "已更新提醒设置";
+    dom.reminderGuideHint.textContent = "";
+    dom.reminderGuide.hidden = false;
+  } else {
+    dom.reminderGuideHint.textContent = message;
+  }
   closeReminderGuide(1600);
   state.upcomingSig = "";
   tick();
