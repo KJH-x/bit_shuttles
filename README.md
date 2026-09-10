@@ -27,7 +27,7 @@
 - **余票实时查询（`/api/availability`）**：Pages Function 带签名访问 BIT 班车预约源站（`hqapp1.bit.edu.cn`），返回每趟余票 `available/total/pct`：
   - **3h 可见窗口**：`0 ≤ 发车-now ≤ 3h` 的付费班次显示具体余票数字，颜色按真实余量（≥15 绿 / 6–14 黄 / ≤5 红）；售罄（余票=0）显示「售罄」红色；
   - **付费 >3h 开售前**：只显示百分比（无具体数字），颜色同样按真实余量；
-  - **免费**：始终显示余票量；**彩虹**：恒显示 `--` 灰色占位（两个独立连字符，不显示真实余量）；
+  - **免费**：始终显示余票量；**彩虹**：有实车数据（`/api/rainbow`）显示 `余N`/`售罄`，无数据显示 `--` 灰色占位（两个独立连字符）；
   - **主屏**：班次卡右侧两行余票块（占「方向行+倒计时行」高度）——第一行「余N」大数字（38px）、第二行数据龄「数据是x分钟前」，无边框；**逐车独立查询**（最近班次优先，stale-while-revalidate 立刻返缓存）；
   - **PIDS**：固定整数**满载率**列（`100−余票率`，手机端该列在车次左侧，表头桌面+手机均 sticky 冻结）；**等待发车位置显示出发点**（良乡=东校区上车点、中关村=西门上车点）；上车窗口 T-10~T+6（良乡）/T-10~T+5（中关村）显示「开始上车 · 东校区上车点」/「开始上车 · 西门上车点」；
   - **日期切换 + 未来/历史**：即将开行面板可切换 昨日（历史快照，R2）/ 今日 / **明日及未来（+5 天）**：
@@ -41,6 +41,7 @@
   - **容错**：源站连接重试 3 次后放弃，失败日志写入 R2（`avail/last-failed.json`），响应降级显示「—」；
   - **历史记录**：R2 每日快照保留 7 天（字段含 route/dep/paid/rainbow/bookable/available/total/pct/name/id），超期折入累计统计（工作日/周末分组，天数加权；满载率另折入座位加权累计）；`GET /api/history/dates` 提供近 7 天有快照的日期列表；
   - **已知待观察（同时车/加开班次）**：源站偶发对同一 (名称, 发车时间) 返回两条记录（同时车）。当前缓存/前端键为 (date, route, dep) 级、无 id，两车数据不可区分（数据竞争覆盖），主屏/PIDS 只展示其中一行；已为 API trips 增加源站 `id` 并随快照持久化以便未来证实，但**暂不改去重行为**——待实际样本出现后再定去重策略（见 `docs/ARCHITECTURE.md` 改动历史 v1.26）。
+- **彩虹巴士余座（`/api/rainbow`）**：Pages Function 读取 R2 加密信封 `rainbow/cookie.enc`（AES-GCM-256，机器 A 用共享 key 加密 `connect.sid` 后 SigV4 上传）→ 解密 → 调彩虹源站 `rainbow-bus.cn`（`routesByArea`(area=3804 理工大学，翻页) → `searchPlanDates`(今日 plan) → `getBusSeatsWechat`(座位图)）→ 解析余座 → R2 `rainbow/live.json`（300s SWR，与余票同款）→ 前端 `lib/rainbow.js`。仅取「理工大学」线路，按名称「良乡-中关村/中关村-良乡」映射板内 a/c 方向。详见 `docs/rainbow-bus-api-investigation.md`。
 - **数据源界面（勿重复探测）**：BIT 班车预约源站 = `hqapp1.bit.edu.cn`（**仅 http 可达，本机外网 https 直连被拒**）。API 端点：`/vehicle/get-list`、`/vehicle/get-reserved-seats`（见 `functions/_shared/school.js`）。**班次列表用户界面 URL = `http://hqapp1.bit.edu.cn/newbanche/home`**（200，供钉钉跳转/深链使用）。源站无其他 Web UI（`/` 返回纯文本「欢迎访问系统」，`/h5/ /wap/ /vehicle/` 等均 404），仅 API + 客户端界面。
 - **可作为 App 安装（PWA）**：`manifest.webmanifest` 达标（standalone / 图标 / 主题色），浏览器「安装应用」即可添加到桌面。
 - **iOS Safari 安装引导**：iOS 非 PWA 模式打开时，完全加载 5 秒后弹出自定义引导（长按地址栏 → 分享 → 添加到主屏幕，默认作为网页 App 打开）；「知道了」后不再打扰（`localStorage`）。
@@ -74,11 +75,12 @@
 | `lib/duration-profiles.js` | 高德耗时预测原始数据（邻近插值） |
 | `lib/schedule-tables.js` | 纯时刻表数据（前端与 functions 共用；`schedule-data.js` re-export） |
 | `lib/holidays.js` | 法定节假日/调休（2026）+ `scheduleKind` 时刻表类型判定 + 源站实车推断 |
-| `functions/` | Pages Functions：`api/availability.js`、`api/traffic.js`、`api/history/dates.js` + `_shared/`（签名/重试/TTL/R2 历史/路况解析/SigV4） |
+| `lib/rainbow.js` | 彩虹巴士余座数据层（拉 `/api/rainbow`、轮询/TTL、余座文案） |
+| `functions/` | Pages Functions：`api/availability.js`、`api/traffic.js`、`api/history/dates.js`、`api/rainbow.js` + `_shared/`（签名/重试/TTL/R2 历史/路况解析/SigV4/彩虹解析） |
 | `wrangler.toml` | Pages 配置：R2 bucket 绑定 `AVAIL_BUCKET`、`ENABLE_XISHAN` 开关（TTL/窗口/阈值常量以代码为唯一事实来源） |
 | `.dev.vars` | 本地开发 secret（`SCHOOL_SECRET` 等，已 gitignore，生产用 Pages 环境变量） |
 | `assets/qr-*.png` | 高德导航静态二维码（桌面扫码） |
-| `tests/` | auto-test（`node --test tests/*.test.mjs`，148 项） |
+| `tests/` | auto-test（`node --test tests/*.test.mjs`，156 项） |
 | `docs/ARCHITECTURE.md` | 架构 / 设计原因 / 改动历史（面向 LLM） |
 | `_headers` | Cloudflare Pages 安全头 / 缓存 |
 | `meta.json` | 站点元数据（X-B4 约定） |
@@ -115,7 +117,7 @@ node --test tests/*.test.mjs
 
 ## 发版注意
 
-改代码后记得**同步 bump 版本号**（`index.html`、`app.js`、`schedule-data.js` 中的 `?v=20260910-N`、`sw.js` 的 `CACHE_NAME`），否则可能吃到 zone 层旧缓存。详见 `docs/ARCHITECTURE.md` §7。每年国务院公布次年放假安排后：跑一次维护脚本拉 `https://timor.tech/api/holiday/year/<年>` 更新 `lib/holidays.js` 的 `HOLIDAYS`/`MAKEUP_WORKDAYS`（寒暑假等校历特殊安排按需人工增补）。首次启用余票功能需：① Pages 项目绑定 R2 `campus-shuttle-avail`（`wrangler.toml` 已声明）；② 设置生产环境变量 `SCHOOL_SECRET`（Pages secret，勿明文）与 `SCHOOL_SCHEME_ORDER`（默认 `https,http`）。实时路况（v1.17）**无需任何 Pages 环境变量**：本地计划任务脚本用 Windows 用户级 `BITBUS_R2_ACCESS_KEY_ID` / `BITBUS_R2_SECRET_ACCESS_KEY` / `BITBUS_R2_ENDPOINT` / `BITBUS_R2_BUCKET`（专有 key，`R2_*` 为其他项目，勿动）直写 R2 `traffic/live.json`；脚本位于 `workspace/campus-shuttle-amap-refresh-20260905/`，由计划任务「bitbus-amap-refresh」每 10 分钟经 `run-hidden.vbs`（wscript，隐藏窗口、不抢焦点、RegRead 注入凭据）运行，日志追加到 `.opencode/runtime/logs/amap_refresh.log`。
+改代码后记得**同步 bump 版本号**（`index.html`、`app.js`、`schedule-data.js` 中的 `?v=20260910-N`、`sw.js` 的 `CACHE_NAME`），否则可能吃到 zone 层旧缓存。详见 `docs/ARCHITECTURE.md` §7。每年国务院公布次年放假安排后：跑一次维护脚本拉 `https://timor.tech/api/holiday/year/<年>` 更新 `lib/holidays.js` 的 `HOLIDAYS`/`MAKEUP_WORKDAYS`（寒暑假等校历特殊安排按需人工增补）。首次启用余票功能需：① Pages 项目绑定 R2 `campus-shuttle-avail`（`wrangler.toml` 已声明）；② 设置生产环境变量 `SCHOOL_SECRET`（Pages secret，勿明文）与 `SCHOOL_SCHEME_ORDER`（默认 `https,http`）。**彩虹巴士余座（v1.29）**需另设 Pages secret `RAINBOW_COOKIE_KEY`（AES-256-GCM 共享 key，base64；与机器 A 的 `RAINBOW_AES_KEY` 同值，生成/上传流程见 `docs/rainbow-bus-api-investigation.md` §4 与 `workspace/rainbow-cookie-refresh-20260910/`）。实时路况（v1.17）**无需任何 Pages 环境变量**：本地计划任务脚本用 Windows 用户级 `BITBUS_R2_ACCESS_KEY_ID` / `BITBUS_R2_SECRET_ACCESS_KEY` / `BITBUS_R2_ENDPOINT` / `BITBUS_R2_BUCKET`（专有 key，`R2_*` 为其他项目，勿动）直写 R2 `traffic/live.json`；脚本位于 `workspace/campus-shuttle-amap-refresh-20260905/`，由计划任务「bitbus-amap-refresh」每 10 分钟经 `run-hidden.vbs`（wscript，隐藏窗口、不抢焦点、RegRead 注入凭据）运行，日志追加到 `.opencode/runtime/logs/amap_refresh.log`。
 
 ## 部署
 

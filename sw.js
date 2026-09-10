@@ -1,4 +1,4 @@
-const CACHE_NAME = "bitbus-static-v20260910-28";
+const CACHE_NAME = "bitbus-static-v20260910-29";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -21,7 +21,8 @@ const CORE_ASSETS = [
   "/lib/qq-guide.js",
   "/lib/reminder.js",
   "/lib/holidays.js",
-  "/lib/schedule-tables.js"
+  "/lib/schedule-tables.js",
+  "/lib/rainbow.js"
 ];
 
 // 通知点击：打开钉钉（数据源班次列表）；否则聚焦站点页面

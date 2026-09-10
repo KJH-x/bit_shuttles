@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { availColor, mainAvailText, pidsAvailText } from "../lib/availability.js";
+import { rainbowAvailText } from "../lib/rainbow.js";
 
 // mainAvailText/pidsAvailText 输入形状：trip.avail = computeTrip 输出子集
 function avail({ paid = true, visible = true, available, bookable, total, pct, rainbow = false } = {}) {
@@ -61,4 +62,28 @@ test("pidsAvailText: 彩虹 → 🌈；无数据 → -- 占位（两个连字符
   assert.deepEqual(pidsAvailText({}), { text: "--", color: "" });
   assert.deepEqual(pidsAvailText({ avail: avail({ rainbow: true, pct: 50 }) }), { text: "🌈", color: "" });
   assert.deepEqual(pidsAvailText({ rainbow: true, avail: null }), { text: "🌈", color: "" });
+});
+
+test("pidsAvailText: 彩虹有实车数据（rainbowData）→ 满载率%（取补），无数据回退 🌈", () => {
+  // 49 座满员 → 100% 红
+  assert.deepEqual(
+    pidsAvailText({ rainbow: true, avail: null, rainbowData: { seatsTotal: 49, seatsTaken: 49, seatsLeft: 0 } }),
+    { text: "100%", color: "red" }
+  );
+  // 50 座余 25 → 50% 绿（availColor(25)=green）
+  assert.deepEqual(
+    pidsAvailText({ rainbow: true, avail: null, rainbowData: { seatsTotal: 50, seatsTaken: 25, seatsLeft: 25 } }),
+    { text: "50%", color: "green" }
+  );
+  // rainbowData 为空对象 → 🌈
+  assert.deepEqual(pidsAvailText({ rainbow: true, avail: null, rainbowData: {} }), { text: "🌈", color: "" });
+});
+
+test("rainbowAvailText: 主屏彩虹余座文案（有数据 余N/售罄，无数据 null）", () => {
+  assert.deepEqual(rainbowAvailText({ seatsTotal: 49, seatsTaken: 39, seatsLeft: 10 }), { value: "10", color: "yellow" });
+  assert.deepEqual(rainbowAvailText({ seatsTotal: 49, seatsTaken: 49, seatsLeft: 0 }), { value: "售罄", color: "red" });
+  assert.deepEqual(rainbowAvailText({ seatsTotal: 49, seatsTaken: 20, seatsLeft: 29 }), { value: "29", color: "green" });
+  assert.equal(rainbowAvailText(null), null);
+  assert.equal(rainbowAvailText({}), null);
+  assert.equal(rainbowAvailText({ seatsTotal: 0, seatsLeft: 0 }), null);
 });
