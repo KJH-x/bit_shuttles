@@ -1,4 +1,4 @@
-import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-25";
+import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-27";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260910-25";
-import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-25";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260910-25";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-25";
+} from "./lib/schedule.js?v=20260910-27";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-27";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-27";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-27";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -28,8 +28,8 @@ import {
   tripAgeMs,
   availAgeMs,
   fetchHistoryDates
-} from "./lib/availability.js?v=20260910-25";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-25";
+} from "./lib/availability.js?v=20260910-27";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-27";
 import {
   readPref,
   savePref,
@@ -52,7 +52,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260910-25";
+} from "./lib/reminder.js?v=20260910-27";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -928,12 +928,20 @@ const FIDS_ROUTE_COLOR = { a: "var(--dir-a)", c: "var(--dir-c)", d: "var(--dir-d
 
 function fidsLocParts(trip, now, checkpoints, campus) {
   const loc = tripLocation(trip, now, checkpoints, campus);
-  if (!loc) return { main: "—", note: "" };
-  // road 态且带收费站后缀：主文去掉后缀、note 单独渲染（窄屏隐藏）
+  if (!loc) return { head: "—", note: "", tail: "" };
+  // road 态且带收费站后缀：按「前段 + 后缀 + 尾段」拆分——后缀单独成 span（窄屏隐藏），
+  // 桌面端三段拼接还原全名原位（距杜家坎收费站 约 8分钟 · 约 5.8km），不再把后缀甩到句尾
   if (loc.kind === "road" && loc.cpNote) {
-    return { main: loc.text.replace(loc.cpNote, ""), note: loc.cpNote };
+    const idx = loc.text.indexOf(loc.cpNote);
+    if (idx >= 0) {
+      return {
+        head: loc.text.slice(0, idx),
+        note: loc.cpNote,
+        tail: loc.text.slice(idx + loc.cpNote.length)
+      };
+    }
   }
-  return { main: loc.text, note: "" };
+  return { head: loc.text, note: "", tail: "" };
 }
 
 function fidsRowHtml(trip, now) {
@@ -950,7 +958,7 @@ function fidsRowHtml(trip, now) {
       <span class="fids-row__pct" data-role="fids-pct">—</span>
       <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>
       <span class="fids-row__loc" data-role="fids-loc">
-        <span data-role="fids-loc-main">${escapeHtml(parts.main)}</span><span data-role="fids-loc-note">${escapeHtml(parts.note)}</span>
+        <span data-role="fids-loc-head">${escapeHtml(parts.head)}</span><span data-role="fids-loc-note">${escapeHtml(parts.note)}</span><span data-role="fids-loc-tail">${escapeHtml(parts.tail)}</span>
       </span>
     </div>
   `;
@@ -983,10 +991,12 @@ function renderFids(all, now) {
       el.className = `fids-st ${FIDS_PHASE_CLASS[st.phase]}`;
     }
     const parts = fidsLocParts(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
-    const locMain = row.querySelector('[data-role="fids-loc-main"]');
+    const locHead = row.querySelector('[data-role="fids-loc-head"]');
     const locNote = row.querySelector('[data-role="fids-loc-note"]');
-    if (locMain) locMain.textContent = parts.main;
+    const locTail = row.querySelector('[data-role="fids-loc-tail"]');
+    if (locHead) locHead.textContent = parts.head;
     if (locNote) locNote.textContent = parts.note;
+    if (locTail) locTail.textContent = parts.tail;
   });
 }
 

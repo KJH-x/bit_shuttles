@@ -56,8 +56,9 @@ test("pidsAvailText: 满载率 = 100 − pct（整数），颜色按真实余票
   assert.deepEqual(s, { text: "100%", color: "red" });
 });
 
-test("pidsAvailText: 无数据 / 彩虹 → 占位 --（两个连字符）", () => {
+test("pidsAvailText: 彩虹 → 🌈；无数据 → -- 占位（两个连字符）", () => {
   assert.deepEqual(pidsAvailText({ avail: null }), { text: "--", color: "" });
   assert.deepEqual(pidsAvailText({}), { text: "--", color: "" });
-  assert.deepEqual(pidsAvailText({ avail: avail({ rainbow: true, pct: 50 }) }), { text: "--", color: "" });
+  assert.deepEqual(pidsAvailText({ avail: avail({ rainbow: true, pct: 50 }) }), { text: "🌈", color: "" });
+  assert.deepEqual(pidsAvailText({ rainbow: true, avail: null }), { text: "🌈", color: "" });
 });

@@ -1331,7 +1331,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
 }
 
 /* PIDS 运行中进度 = 路线色渐变条：渐变宽度即 --pct，进度信息直接由渐变长度表达。
-   fwd（a/d，良乡/西山→中关村）从左往右渐变；rev（c/e）从右往左渐变（与运行详情 .running-item 一致）。 */
+   饱和度高的一头在游标（进度前沿），渐变尾巴（低饱和）朝 origin 反向渐隐：
+   fwd（a/d，良乡/西山→中关村）游标在右 → 270deg（右强左弱）；rev（c/e）游标在左 → 90deg（左强右弱）。 */
 .fids-row--run::before {
   content: "";
   position: absolute;
@@ -1339,29 +1340,29 @@ section[aria-labelledby="runningTitle"] .panel__head {
   left: 0;
   right: auto;
   width: var(--pct, 0%);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 28%, transparent), color-mix(in srgb, var(--dir-a) 6%, transparent));
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-a) 28%, transparent), color-mix(in srgb, var(--dir-a) 6%, transparent));
   pointer-events: none;
   z-index: 0;
 }
 
 .fids-row--run[data-route="a"]::before {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 28%, transparent), color-mix(in srgb, var(--dir-a) 6%, transparent));
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-a) 28%, transparent), color-mix(in srgb, var(--dir-a) 6%, transparent));
 }
 
 .fids-row--run[data-route="c"]::before {
   left: auto;
   right: 0;
-  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-c) 28%, transparent), color-mix(in srgb, var(--dir-c) 6%, transparent));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-c) 28%, transparent), color-mix(in srgb, var(--dir-c) 6%, transparent));
 }
 
 .fids-row--run[data-route="d"]::before {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-d) 28%, transparent), color-mix(in srgb, var(--dir-d) 6%, transparent));
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-d) 28%, transparent), color-mix(in srgb, var(--dir-d) 6%, transparent));
 }
 
 .fids-row--run[data-route="e"]::before {
   left: auto;
   right: 0;
-  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-e) 28%, transparent), color-mix(in srgb, var(--dir-e) 6%, transparent));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-e) 28%, transparent), color-mix(in srgb, var(--dir-e) 6%, transparent));
 }
 
 .fids-row--run[data-rainbow="true"]::before {
@@ -1467,6 +1468,21 @@ section[aria-labelledby="runningTitle"] .panel__head {
 .fids-st--arr {
   background: var(--success);
   color: #fff;
+}
+
+/* PIDS 桌面端：开点/满载率/状态 三列的表头与内容居中（窄屏重排布局不受影响） */
+@media (min-width: 769px) {
+  .fids-table__head .h-dep,
+  .fids-table__head .h-load,
+  .fids-table__head .h-status {
+    text-align: center;
+  }
+  .fids-row__dep {
+    text-align: center;
+  }
+  .fids-row .fids-st {
+    justify-self: center;
+  }
 }
 
 .fids-legend {
