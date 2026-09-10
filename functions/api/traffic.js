@@ -4,18 +4,7 @@
 // 直接 SigV4 PUT 到 R2 bucket 的 traffic/live.json，本端点只负责读取缓存供前端轮询。
 
 import { readTrafficLive } from "../_shared/traffic-cache.js";
-
-function json(data, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...extraHeaders }
-  });
-}
-
-function cacheHeaders() {
-  // 与 availability 一致：实时数据不加浏览器/边缘缓存（前端 60s 轮询即可）
-  return { "Cache-Control": "private, no-store" };
-}
+import { json, cacheHeaders } from "../_shared/response.js";
 
 function dirsView(live) {
   return live ? { fwd: live.fwd != null ? live.fwd : null, rev: live.rev != null ? live.rev : null } : { fwd: null, rev: null };

@@ -26,10 +26,15 @@ export function beijingDateStr(ms) {
   return new Date(ms + 8 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+// 某日 00:00（Beijing）对应 epoch ms
+export function dateStartMs(dateStr) {
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  return Date.UTC(y, mo - 1, d) - 8 * 3600 * 1000;
+}
+
 export function depToMs(dep, dateStr) {
   const [h, m] = dep.split(":").map(Number);
-  const [y, mo, d] = dateStr.split("-").map(Number);
-  return Date.UTC(y, mo - 1, d, h, m) - 8 * 3600 * 1000;
+  return dateStartMs(dateStr) + h * 3600 * 1000 + m * 60000;
 }
 
 // 付费班次：阶段 + TTL（全部封顶 ≤5 分钟）
@@ -77,6 +82,31 @@ export function minTtl(ttls) {
   const valid = ttls.filter((t) => t != null);
   if (!valid.length) return null;
   return Math.min(...valid);
+}
+
+// 未来某日「整份数据」的 TTL（源站实车可能变动/加开，需限刷新节奏）：
+//   距该日 3h 前                       → 1 天（遥远远期，仅预览）
+//   该日 3h 前 ~ 该日结束 3h 前          → 1 小时（临近活跃期，及时反映变动）
+//   该日结束 3h 后（已结束）             → null（不会再作为未来日期被查询）
+export function futureDayTtl(nowMs, dateStr) {
+  const start = dateStartMs(dateStr);
+  const end = start + 24 * 3600 * 1000;
+  const THREE_H = 3 * 3600 * 1000;
+  if (nowMs < start - THREE_H) return 86400;
+  if (nowMs < end - THREE_H) return 3600;
+  return null;
+}
+
+// 历史回看口径：付费班次不再套 3h 可见窗口，用 bookable（原始余票，clamp≥0）直接展示；
+// 无 bookable 的旧快照原样返回（available 可能为 null，由前端降级）。
+export function historyTripView(t) {
+  if (!t || typeof t !== "object") return t;
+  if (t.paid === true && t.bookable != null) {
+    const bookable = t.bookable > 0 ? t.bookable : 0;
+    if (bookable !== t.available || t.visible !== true) return { ...t, available: bookable, visible: true };
+    return t;
+  }
+  return t;
 }
 
 // 源站 name → route 映射

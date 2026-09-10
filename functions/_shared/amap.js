@@ -11,6 +11,8 @@ export const AMAP_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) A
 export const AMAP_API = "https://m.amap.com/service/navigation/driving.json";
 
 // fwd=良乡→中关村（route a），rev=中关村→良乡（route c）
+// 注意：route 字母须与前端 lib/traffic-routes.js（FWD_ROUTE/REV_ROUTE）保持一致，
+// 由 tests/route-lock.test.mjs 交叉锁定。
 export const ROUTE_CFG = {
   fwd: { route: "a", origin: "116.170248,39.72822", destination: "116.315469,39.959984", targetKm: 36.5, cutPoints: [17022, 27187] },
   rev: { route: "c", origin: "116.315469,39.959984", destination: "116.170248,39.72822", targetKm: 36.8, cutPoints: [18933, 30862] }

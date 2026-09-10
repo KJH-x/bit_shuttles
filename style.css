@@ -1330,30 +1330,39 @@ section[aria-labelledby="runningTitle"] .panel__head {
   background: var(--surface-2);
 }
 
+/* PIDS 运行中进度 = 路线色渐变条：渐变宽度即 --pct，进度信息直接由渐变长度表达。
+   饱和度高的一头在游标（进度前沿），渐变尾巴（低饱和）朝 origin 反向渐隐：
+   fwd（a/d，良乡/西山→中关村）游标在右 → 270deg（右强左弱）；rev（c/e）游标在左 → 90deg（左强右弱）。 */
 .fids-row--run::before {
   content: "";
   position: absolute;
   inset: 0;
+  left: 0;
+  right: auto;
   width: var(--pct, 0%);
-  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-a) 28%, transparent), color-mix(in srgb, var(--dir-a) 6%, transparent));
   pointer-events: none;
   z-index: 0;
 }
 
 .fids-row--run[data-route="a"]::before {
-  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-a) 28%, transparent), color-mix(in srgb, var(--dir-a) 6%, transparent));
 }
 
 .fids-row--run[data-route="c"]::before {
-  background: color-mix(in srgb, var(--dir-c) 18%, transparent);
+  left: auto;
+  right: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-c) 28%, transparent), color-mix(in srgb, var(--dir-c) 6%, transparent));
 }
 
 .fids-row--run[data-route="d"]::before {
-  background: color-mix(in srgb, var(--dir-d) 18%, transparent);
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-d) 28%, transparent), color-mix(in srgb, var(--dir-d) 6%, transparent));
 }
 
 .fids-row--run[data-route="e"]::before {
-  background: color-mix(in srgb, var(--dir-e) 18%, transparent);
+  left: auto;
+  right: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-e) 28%, transparent), color-mix(in srgb, var(--dir-e) 6%, transparent));
 }
 
 .fids-row--run[data-rainbow="true"]::before {
@@ -1363,39 +1372,6 @@ section[aria-labelledby="runningTitle"] .panel__head {
     rgba(74, 222, 128, .32),
     rgba(96, 165, 250, .32),
     rgba(167, 139, 250, .32));
-}
-
-/* PIDS 静止路况波前：仿主页波纹但无动画，静止跟随 --pct（由 renderFids 每帧更新） */
-.fids-row--run::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 34%;
-  left: var(--pct, 0%);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 60%, transparent), transparent);
-  opacity: .30;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.fids-row--run[data-route="a"]::after {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 60%, transparent), transparent);
-}
-
-/* rev（c/e，中关村/西山发车）：波前在右，从右向左渐隐 */
-.fids-row--run[data-route="c"]::after,
-.fids-row--run[data-route="e"]::after {
-  left: auto;
-  right: var(--pct);
-  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-c) 60%, transparent), transparent);
-}
-
-.fids-row--run[data-route="d"]::after {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-d) 60%, transparent), transparent);
-}
-
-.fids-row--run[data-route="e"]::after {
-  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-e) 60%, transparent), transparent);
 }
 
 .fids-row > * {
@@ -1423,6 +1399,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-size: .82rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  font-variant-ligatures: none; /* 保持 "--" 两个独立连字符，不合并为 — */
   text-align: center;
 }
 
@@ -1491,6 +1468,21 @@ section[aria-labelledby="runningTitle"] .panel__head {
 .fids-st--arr {
   background: var(--success);
   color: #fff;
+}
+
+/* PIDS 桌面端：开点/满载率/状态 三列的表头与内容居中（窄屏重排布局不受影响） */
+@media (min-width: 769px) {
+  .fids-table__head .h-dep,
+  .fids-table__head .h-load,
+  .fids-table__head .h-status {
+    text-align: center;
+  }
+  .fids-row__dep {
+    text-align: center;
+  }
+  .fids-row .fids-st {
+    justify-self: center;
+  }
 }
 
 .fids-legend {
@@ -1631,15 +1623,19 @@ section[aria-labelledby="runningTitle"] .panel__head {
 
 .trip-item__row1 {
   grid-area: row1;
+  position: relative; /* 「余」标签右下角定位基准 */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-/* 「余」标签：置于 row1 行内，独自右对齐（margin-left:auto 推向其右侧） */
+/* 「余」标签：绝对定位于 row1 右下角（脱离 flex 流，不影响行高），不占位不换行 */
 .trip-item__row1 .trip-item__avail-l {
-  margin-left: auto;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
   font-size: .95rem;
   font-weight: 700;
   line-height: 1;
@@ -1718,6 +1714,7 @@ section[aria-labelledby="runningTitle"] .panel__head {
   font-weight: 800;
   line-height: 1;
   color: var(--muted);
+  font-variant-ligatures: none; /* 保持 "--" 两个独立连字符 */
 }
 
 .trip-item__avail-ttl {
@@ -1971,3 +1968,67 @@ section[aria-labelledby="runningTitle"] .panel__head {
     display: none;
   }
 }
+
+/* ===== 日期选择器（视觉隐藏 input，showPicker 弹出） ===== */
+.date-nav__picker {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* ===== 历史记录面板 ===== */
+.history-stats {
+  margin: 0 0 12px;
+  font-size: .88rem;
+  color: var(--muted);
+}
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.history-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: .9rem;
+}
+.history-item__route {
+  color: var(--text);
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.history-item__dep {
+  font-weight: 700;
+  color: var(--text);
+}
+.history-item__avail {
+  color: var(--primary);
+  min-width: 3.5em;
+  text-align: right;
+}
+.history-item__load {
+  color: var(--muted);
+  min-width: 3em;
+  text-align: right;
+}
+.history-empty {
+  padding: 24px;
+}
+

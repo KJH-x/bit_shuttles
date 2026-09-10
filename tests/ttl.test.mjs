@@ -7,7 +7,10 @@ import {
   applyVisibility,
   minTtl,
   depToMs,
+  dateStartMs,
   beijingDateStr,
+  futureDayTtl,
+  historyTripView,
   NAME_TO_ROUTE
 } from "../functions/_shared/ttl.js";
 import {
@@ -18,7 +21,13 @@ import {
   cumulativeAvg,
   trafficView,
   groupOf,
-  shiftDate
+  shiftDate,
+  tripUsed,
+  tripLoadRatio,
+  dayLoadSeatWeighted,
+  emptyLoadCumulative,
+  foldLoadInto,
+  cumulativeLoadAvg
 } from "../functions/_shared/metrics.js";
 import { md5Hex } from "../functions/_shared/md5.js";
 import { sign } from "../functions/_shared/school.js";
@@ -27,14 +36,14 @@ import { mainAvailText } from "../lib/availability.js";
 const MIN = 60000;
 const T = Date.UTC(2026, 8, 4, 10, 0, 0) - 8 * 3600 * 1000; // Beijing 2026-09-04 10:00
 
-test("md5: 双重 MD5 签名与实测一致", () => {
+test("md5: 双重 MD5 签名与独立预计算摘要一致", () => {
   const secret = "test-secret-not-production";
   const t = "1788489975368";
-  const expected = md5Hex(md5Hex(secret + t));
-  assert.equal(md5Hex(md5Hex(secret + t)), expected);
+  // 独立预计算（PowerShell/openssl 一致）：md5(md5(secret+t))
+  assert.equal(md5Hex(md5Hex(secret + t)), "dcd78a8ea923b483dd3ef4b31d2f105a");
   const sig = sign(secret, Number(t));
   assert.equal(sig.apitime, "1788489975368");
-  assert.equal(sig.apitoken, expected);
+  assert.equal(sig.apitoken, "dcd78a8ea923b483dd3ef4b31d2f105a");
   // 生产 secret 回归：仅当显式提供 SCHOOL_TEST_SECRET 时校验（避免硬编码进仓库）
   const prod = process.env.SCHOOL_TEST_SECRET;
   if (prod) {
@@ -193,4 +202,83 @@ test("mainAvailText: 窗口外售罄班次（available=null, bookable≤0）显�
     avail: { route: "a", dep: "20:15", paid: true, available: 20, bookable: 20, total: 48, pct: 42 }
   });
   assert.deepEqual(count, { value: "20", color: "green" });
+});
+
+test("dateStartMs: 某日 Beijing 零点 epoch", () => {
+  assert.equal(dateStartMs("2026-09-11"), Date.UTC(2026, 8, 11) - 8 * 3600 * 1000);
+  assert.equal(depToMs("00:00", "2026-09-11"), dateStartMs("2026-09-11"));
+  assert.equal(depToMs("08:30", "2026-09-11"), dateStartMs("2026-09-11") + 8.5 * 3600 * 1000);
+});
+
+test("futureDayTtl: 距该日 3h 前=1 天；活跃窗口=1 小时；结束后=null", () => {
+  const start = dateStartMs("2026-09-11");
+  const H = 3600 * 1000;
+  assert.equal(futureDayTtl(start - 4 * H, "2026-09-11"), 86400);
+  assert.equal(futureDayTtl(start - 3 * H - 1, "2026-09-11"), 86400);
+  assert.equal(futureDayTtl(start - 3 * H + 1, "2026-09-11"), 3600);
+  assert.equal(futureDayTtl(start + 20 * H, "2026-09-11"), 3600);
+  assert.equal(futureDayTtl(start + 21 * H - 1, "2026-09-11"), 3600);
+  assert.equal(futureDayTtl(start + 21 * H + 1, "2026-09-11"), null);
+});
+
+test("historyTripView: 历史口径不套 3h 窗口，用 bookable 直接展示", () => {
+  const paid = { route: "a", dep: "07:50", paid: true, bookable: 12, available: null, total: 48 };
+  const v = historyTripView(paid);
+  assert.equal(v.available, 12);
+  assert.equal(v.visible, true);
+  // 超额售罄 → clamp 0
+  assert.equal(historyTripView({ ...paid, bookable: -2 }).available, 0);
+  // 免费班次 / 无 bookable 旧快照 / null → 原样
+  const free = { route: "a", dep: "06:20", paid: false, available: 5, total: 48 };
+  assert.equal(historyTripView(free), free);
+  const legacy = { route: "a", dep: "07:50", paid: true, available: null, total: 48 };
+  assert.equal(historyTripView(legacy), legacy);
+  assert.equal(historyTripView(null), null);
+  // paid+bookable 且 available 已一致 → 不复制（同一引用）
+  const already = { route: "a", dep: "07:50", paid: true, bookable: 5, available: 5, visible: true };
+  assert.equal(historyTripView(already), already);
+});
+
+test("groupOf: 法定节假日按周末分组、调休补班按工作日分组", () => {
+  assert.equal(groupOf("2026-09-25"), "weekend"); // 中秋周五
+  assert.equal(groupOf("2026-10-01"), "weekend"); // 国庆
+  assert.equal(groupOf("2026-09-20"), "weekday"); // 调休补班周日
+  assert.equal(groupOf("2026-09-07"), "weekday"); // 普通周一（存量回归）
+  assert.equal(groupOf("2026-09-05"), "weekend"); // 普通周六（存量回归）
+});
+
+test("满载率：tripUsed / tripLoadRatio / dayLoadSeatWeighted（座位加权）", () => {
+  assert.deepEqual(tripUsed({ total: 48, bookable: 12 }), { used: 36, total: 48 });
+  assert.deepEqual(tripUsed({ total: 48, bookable: -3 }), { used: 48, total: 48 }); // bookable clamp
+  assert.deepEqual(tripUsed({ total: 48, available: 20 }), { used: 28, total: 48 }); // 旧快照无 bookable 用 available
+  assert.equal(tripUsed({ total: 0, available: 1 }), null);
+  assert.equal(tripUsed({ total: 48, available: null }), null);
+  assert.equal(tripLoadRatio({ total: 48, bookable: 12 }), 36 / 48);
+  const day = dayLoadSeatWeighted([
+    { total: 50, bookable: 25 },
+    { total: 50, bookable: 0 }
+  ]);
+  assert.equal(day.sumUsed, 75);
+  assert.equal(day.sumTotal, 100);
+  assert.equal(day.ratio, 0.75);
+  // 与简单平均对比：一趟 48 座全满 + 一趟 48 座全空 → 简单平均 0.5，座位加权 0.5（两趟同容量时相等）
+  assert.equal(dayAvgRatio([{ total: 48, available: 0 }, { total: 48, available: 48 }]), 0.5);
+});
+
+test("满载率累计：foldLoadInto / cumulativeLoadAvg（座位加权，天数累计）", () => {
+  let cum = emptyLoadCumulative();
+  cum = foldLoadInto(cum, "2026-09-01", { sumUsed: 10, sumTotal: 100, ratio: 0.1 }); // 工作日
+  cum = foldLoadInto(cum, "2026-09-02", { sumUsed: 40, sumTotal: 100, ratio: 0.4 });
+  cum = foldLoadInto(cum, "2026-09-05", { sumUsed: 60, sumTotal: 100, ratio: 0.6 }); // 周末
+  assert.equal(cum.weekday.days, 2);
+  assert.equal(cum.weekday.sumUsed, 50);
+  assert.equal(cum.weekday.sumTotal, 200);
+  assert.equal(cumulativeLoadAvg(cum, "weekday"), 0.25);
+  assert.equal(cumulativeLoadAvg(cum, "weekend"), 0.6);
+  assert.equal(cumulativeLoadAvg(emptyLoadCumulative(), "weekday"), null);
+  // 节假日折入周末桶（与 groupOf 一致）
+  let cum2 = emptyLoadCumulative();
+  cum2 = foldLoadInto(cum2, "2026-09-25", { sumUsed: 10, sumTotal: 50, ratio: 0.2 });
+  assert.equal(cum2.weekend.days, 1);
+  assert.equal(cumulativeLoadAvg(cum2, "weekend"), 0.2);
 });

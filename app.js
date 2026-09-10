@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-20";
+import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-28";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260904-20";
-import { now, syncClock } from "./lib/time.js?v=20260904-20";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-20";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-20";
+} from "./lib/schedule.js?v=20260910-28";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-28";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-28";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-28";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -26,9 +26,10 @@ import {
   mainAvailText,
   pidsAvailText,
   tripAgeMs,
-  availAgeMs
-} from "./lib/availability.js?v=20260904-20";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-20";
+  availAgeMs,
+  fetchHistoryDates
+} from "./lib/availability.js?v=20260910-28";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-28";
 import {
   readPref,
   savePref,
@@ -37,11 +38,14 @@ import {
   setReminder,
   unsetReminder,
   reminderMethodOf,
+  hasBeenAsked,
+  markAsked,
   isPwa,
   isIosSafari,
   notificationSupported,
   notificationGranted,
   ensureNotificationPermission,
+  DEFAULT_OFFSET_MIN,
   icsHintDismissed,
   dismissIcsHint,
   openDingTalk,
@@ -49,7 +53,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260904-20";
+} from "./lib/reminder.js?v=20260910-28";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -73,6 +77,12 @@ const dom = {
   datePrev: document.getElementById("datePrev"),
   dateNext: document.getElementById("dateNext"),
   dateLabel: document.getElementById("dateLabel"),
+  datePicker: document.getElementById("datePicker"),
+  historyPanel: document.getElementById("historyPanel"),
+  historyPanelTitle: document.getElementById("historyPanelTitle"),
+  historyStats: document.getElementById("historyStats"),
+  historyList: document.getElementById("historyList"),
+  historyEmpty: document.getElementById("historyEmpty"),
   routeChips: document.getElementById("routeChips"),
   trackMain: document.getElementById("trackMain"),
   corridorContainer: document.getElementById("corridors"),
@@ -125,25 +135,49 @@ const state = {
   runningSig: "",
   upcomingSig: "",
   fidsSig: "",
+  historySig: "",
   fidsAutoScroll: false,
   viewDate: null, // null=跟随真实今天；否则 'YYYY-MM-DD'
   displayDate: null, // 实际展示日期（末班后=明日；avail 数据 date 以它为准）
   availMap: new Map(), // `${route}|${dep}` → avail
   traffic: null,
-  trafficLive: null
+  trafficLive: null,
+  futureTrips: new Map(), // 未来日期 → 源站实车 trips（批量接口）
+  scheduleKindByDate: new Map(), // 日期 → 源站实车推断的时刻表类型
+  history: null, // { date, trips, stats } 历史快照 + 满载率统计
+  historyDates: [] // 近 7 天有快照的历史日期
 };
 
-function dayKind(date) {
-  return (isWeekend(date) ? "周末" : "工作日");
+const MAX_FUTURE_DAYS = 5; // 未来查询上限（源站实车仅提前约 3 天发布，超出显示空/未发布）
+const MIN_PAST_DAYS = 30; // 历史回看下限（快照仅保留 7 天，多翻无意义）
+
+function shiftDateStr(dateStr, delta) {
+  const d = dateFromStr(dateStr);
+  d.setDate(d.getDate() + delta);
+  return d.toISOString().slice(0, 10);
 }
 
-function badgeText(refDate, nowDate) {
+function maxFutureStr() {
+  return shiftDateStr(beijingTodayStr(), MAX_FUTURE_DAYS);
+}
+
+function minPastStr() {
+  return shiftDateStr(beijingTodayStr(), -MIN_PAST_DAYS);
+}
+
+function dayKind(date) {
+  return (scheduleKind(date) === "weekend" ? "周末" : "工作日");
+}
+
+function badgeText(refDate, nowDate, kindOverride) {
   const sameDay = refDate.getFullYear() === nowDate.getFullYear() && refDate.getMonth() === nowDate.getMonth() && refDate.getDate() === nowDate.getDate();
-  return (sameDay ? "" : "明日 · ") + dayKind(refDate);
+  const diff = Math.round((dateFromStr(dateStrOf(refDate)) - dateFromStr(dateStrOf(nowDate))) / 86400000);
+  const prefix = sameDay ? "" : diff === 1 ? "明日 · " : diff === -1 ? "昨日 · " : "";
+  return prefix + (kindOverride || dayKind(refDate));
 }
 
 function beijingTodayStr() {
-  return new Date(now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  return toBeijingDateStr(now());
 }
 
 function viewDateStr() {
@@ -176,43 +210,74 @@ function fmtDateLabel(s) {
   return `${s.slice(5).replace("-", "/")} · 周${wk}`;
 }
 
-function shiftViewDate(delta) {
-  const d = dateFromStr(viewDateStr());
-  d.setDate(d.getDate() + delta);
-  state.viewDate = d.toISOString().slice(0, 10);
-  setAvailDate(state.viewDate);
+function goToDate(dateStr) {
+  if (!dateStr) return;
+  state.viewDate = dateStr;
+  setAvailDate(dateStr);
   state.upcomingSig = "";
   state.fidsSig = "";
+  state.historySig = "";
   renderDateNav();
   tick();
 }
 
+function backToday() {
+  state.viewDate = null;
+  setAvailDate(beijingTodayStr());
+  state.upcomingSig = "";
+  state.fidsSig = "";
+  state.historySig = "";
+  renderDateNav();
+  tick();
+}
+
+function shiftViewDate(delta) {
+  goToDate(shiftDateStr(viewDateStr(), delta));
+}
+
 function renderDateNav() {
   const s = viewDateStr();
+  const today = beijingTodayStr();
   dom.dateLabel.textContent = fmtDateLabel(s);
-  dom.dateNext.disabled = s >= beijingTodayStr();
-  dom.dateLabel.title = state.viewDate ? "点击返回今日" : "今日";
+  dom.datePrev.disabled = s <= minPastStr();
+  dom.dateNext.disabled = s >= maxFutureStr();
+  dom.dateLabel.title = state.viewDate ? "点击打开日期选择器（回车返回今日）" : "点击打开日期选择器";
+  if (dom.datePicker) {
+    dom.datePicker.value = s;
+    dom.datePicker.min = minPastStr();
+    dom.datePicker.max = maxFutureStr();
+  }
 }
 
 function bindDateNav() {
   dom.datePrev.addEventListener("click", () => shiftViewDate(-1));
   dom.dateNext.addEventListener("click", () => shiftViewDate(1));
   dom.dateLabel.addEventListener("click", () => {
-    state.viewDate = null;
-    setAvailDate(beijingTodayStr());
-    state.upcomingSig = "";
-    state.fidsSig = "";
-    renderDateNav();
-    tick();
+    const p = dom.datePicker;
+    if (!p) { backToday(); return; }
+    p.value = viewDateStr();
+    if (p.showPicker) p.showPicker();
+    else p.focus();
   });
+  dom.dateLabel.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    backToday();
+  });
+  if (dom.datePicker) {
+    dom.datePicker.addEventListener("change", () => {
+      if (dom.datePicker.value) goToDate(dom.datePicker.value);
+    });
+  }
 }
 
 function initAvailBridge() {
   initAvail((data) => {
+    const today = beijingTodayStr();
     if (!data) {
       state.traffic = null;
     } else {
-      const d = data.date || beijingTodayStr();
+      const d = data.date || today;
       // 批量数据只「填补缺失」，不覆盖已存在的逐车精确值：
       // 逐车接口带 date+route+dep 实时拉取（最新），批量 live 缓存可能残缺/过期，
       // 若用批量完全重建 availMap 会清掉逐车已填的值 → 该班次余票「消失」。
@@ -222,13 +287,30 @@ function initAvailBridge() {
         if (!map.has(k)) map.set(k, t);
       }
       state.availMap = map;
-      state.traffic = d === beijingTodayStr() ? data.traffic : null;
+      state.traffic = d === today ? data.traffic : null;
+      if (data.scheduleKind) state.scheduleKindByDate.set(d, data.scheduleKind);
+      // 未来日期：缓存源站实车 trips（列表驱动）；历史日期：缓存快照 + 满载率统计
+      if (d > today && Array.isArray(data.trips)) state.futureTrips.set(d, data.trips);
+      if (d < today) state.history = { date: d, trips: data.trips || [], stats: data.stats || null };
     }
     renderTraffic();
     state.upcomingSig = "";
     state.fidsSig = "";
+    state.historySig = "";
     tick();
   });
+}
+
+// 展示日班次列表：今日=静态时刻表；未来=源站实车（未发布则空）；历史=空（交给历史面板）。
+function viewTripsFor(dateStr) {
+  const today = beijingTodayStr();
+  if (dateStr === today) return activeTrips(dateFromStr(dateStr));
+  if (dateStr > today) {
+    const raw = state.futureTrips.get(dateStr);
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    return raw.map((t) => ({ ...t, id: `f-${t.route}-${t.dep}-${t.id || "x"}` }));
+  }
+  return [];
 }
 
 function renderTraffic() {
@@ -258,6 +340,25 @@ function renderTrafficNote(now) {
     note.hidden = false;
   } else {
     note.hidden = true;
+  }
+}
+
+// 高德跳转按钮实时耗时：`良乡 → 中关村(54分)`（半角括号 + 分钟，超 1 小时仍用分钟，不加「时」）。
+// 与路况条同源同新鲜度（realtimeDurMin 过期/无数据 → 回退纯文字）。
+const AMAP_BTN_ROUTES = ["a", "c"];
+
+function renderAmapDuration() {
+  const n = now();
+  for (let i = 0; i < dom.amapButtons.length; i++) {
+    const btn = dom.amapButtons[i];
+    if (!btn) continue;
+    const route = AMAP_BTN_ROUTES[i];
+    if (!route) continue;
+    if (!btn.dataset.baseLabel) btn.dataset.baseLabel = btn.textContent.trim();
+    const base = btn.dataset.baseLabel;
+    const dur = realtimeDurMin(state.trafficLive, route, n);
+    const label = dur != null ? `${base}(${Math.round(dur)}分)` : base;
+    if (btn.textContent !== label) btn.textContent = label;
   }
 }
 
@@ -691,14 +792,22 @@ function updateTripAvail(li, trip) {
   const key = `${displayDateStr()}|${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
   const view = mainAvailText({ ...trip, avail: a });
+  const clearLabel = () => { if (lEl) { lEl.textContent = ""; lEl.className = "trip-item__avail-l"; } };
   if (!view) {
     avEl.textContent = "";
     avEl.className = "trip-item__avail";
-    if (lEl) { lEl.textContent = ""; lEl.className = "trip-item__avail-l"; }
+    clearLabel();
     return;
   }
-  avEl.className = `trip-item__avail avail--${view.color}`;
-  const ageMs = tripAgeMs(trip.route, trip.dep) ?? availAgeMs();
+  // 彩虹/占位 "--"：小号灰色，不显示「余」标签与数据龄
+  if (view.value === "--") {
+    avEl.className = "trip-item__avail avail--none";
+    clearLabel();
+    avEl.innerHTML = '<span class="trip-item__avail-n">--</span>';
+    return;
+  }
+  avEl.className = view.color ? `trip-item__avail avail--${view.color}` : "trip-item__avail";
+  const ageMs = tripAgeMs(trip.route, trip.dep, displayDateStr()) ?? availAgeMs();
   const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
   // 售罄不显示「余」（置于 row1 行右侧）；数字+数据龄留在 avail 块
   const label = view.value === "售罄" ? "" : "余";
@@ -753,7 +862,14 @@ function renderUpcoming(all, now) {
     if (byRoute[t.route]) byRoute[t.route].push(t);
   }
   const total = list.length;
-  dom.upcomingEmpty.hidden = total > 0;
+  const viewDate = displayDateStr();
+  const today = beijingTodayStr();
+  dom.upcomingEmpty.hidden = !(total === 0 && viewDate >= today);
+  if (total === 0 && viewDate >= today) {
+    dom.upcomingEmpty.innerHTML = viewDate > today
+      ? '<h3>该日班次尚未发布</h3><p>源站实车仅提前约 3 天发布；发布后会自动显示。</p>'
+      : '<h3>今天没有更多班次了</h3><p>今日班次均已开行，请明天再来查看。</p>';
+  }
   dom.resultsStatus.textContent = `即将开行 ${total} 个班次`;
   const columns = { a: dom.tripColumnA, c: dom.tripColumnC, d: dom.tripColumnD, e: dom.tripColumnE };
   const lists = { a: dom.tripListA, c: dom.tripListC, d: dom.tripListD, e: dom.tripListE };
@@ -762,13 +878,15 @@ function renderUpcoming(all, now) {
     columns[id].hidden = trips.length === 0;
     renderList(lists[id], trips, now, true);
   }
-  // 逐车拉取余票：最近班次优先；stale-while-revalidate（立刻返缓存，过期后台刷）
-  const d = displayDateStr();
-  refreshUpcoming(d, list, (route, dep, tripData) => {
-    state.availMap.set(`${d}|${route}|${dep}`, tripData);
-    const row = [...dom.tripListA.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListC.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListD.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListE.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`)];
-    for (const li of row) updateTripAvail(li, { route, dep });
-  });
+  // 逐车拉取余票：仅今日（未来/历史由批量数据直接驱动，避免对未发布日逐车打源站）
+  const d = viewDate;
+  if (d === today) {
+    refreshUpcoming(d, list, (route, dep, tripData) => {
+      state.availMap.set(`${d}|${route}|${dep}`, tripData);
+      const row = [...dom.tripListA.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListC.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListD.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`), ...dom.tripListE.querySelectorAll(`li[data-route="${route}"][data-dep="${dep}"]`)];
+      for (const li of row) updateTripAvail(li, { route, dep });
+    });
+  }
 }
 
 /* ===== Status line ===== */
@@ -798,7 +916,7 @@ function bindChips() {
       c.setAttribute("aria-pressed", String(active));
     });
     const refDate = state.viewDate ? dateFromStr(state.viewDate) : activeTripsForNow().refDate;
-    renderUpcoming(computeForDate(activeTrips(refDate), now(), refDate), now());
+    renderUpcoming(computeForDate(viewTripsFor(dateStrOf(refDate)), now(), refDate), now());
   });
 }
 
@@ -811,12 +929,20 @@ const FIDS_ROUTE_COLOR = { a: "var(--dir-a)", c: "var(--dir-c)", d: "var(--dir-d
 
 function fidsLocParts(trip, now, checkpoints, campus) {
   const loc = tripLocation(trip, now, checkpoints, campus);
-  if (!loc) return { main: "—", note: "" };
-  // road 态且带收费站后缀：主文去掉后缀、note 单独渲染（窄屏隐藏）
+  if (!loc) return { head: "—", note: "", tail: "" };
+  // road 态且带收费站后缀：按「前段 + 后缀 + 尾段」拆分——后缀单独成 span（窄屏隐藏），
+  // 桌面端三段拼接还原全名原位（距杜家坎收费站 约 8分钟 · 约 5.8km），不再把后缀甩到句尾
   if (loc.kind === "road" && loc.cpNote) {
-    return { main: loc.text.replace(loc.cpNote, ""), note: loc.cpNote };
+    const idx = loc.text.indexOf(loc.cpNote);
+    if (idx >= 0) {
+      return {
+        head: loc.text.slice(0, idx),
+        note: loc.cpNote,
+        tail: loc.text.slice(idx + loc.cpNote.length)
+      };
+    }
   }
-  return { main: loc.text, note: "" };
+  return { head: loc.text, note: "", tail: "" };
 }
 
 function fidsRowHtml(trip, now) {
@@ -825,7 +951,7 @@ function fidsRowHtml(trip, now) {
   const pct = st.phase === "dep" ? Math.round(trip.progress * 100) : 0;
   const parts = fidsLocParts(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
   return `
-    <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" data-dep="${escapeHtml(trip.dep)}" style="--pct:${pct}%">
+    <div class="fids-row fids-row--${group}" data-id="${trip.id}" data-route="${trip.route}" data-rainbow="${trip.rainbow}" data-dep="${escapeHtml(trip.dep)}" style="--pct:${pct}%">
       <span class="fids-row__arrow fids-row__arrow--l" aria-hidden="true">${FIDS_ARROW_L[trip.route] || ""}</span>
       <span class="fids-row__arrow fids-row__arrow--r" aria-hidden="true">${FIDS_ARROW_R[trip.route] || ""}</span>
       <span class="fids-row__dir">${escapeHtml(ROUTE_LABEL[trip.route])}</span>
@@ -833,7 +959,7 @@ function fidsRowHtml(trip, now) {
       <span class="fids-row__pct" data-role="fids-pct">—</span>
       <span class="fids-st ${FIDS_PHASE_CLASS[st.phase]}" data-role="fids-status">${escapeHtml(st.label)}</span>
       <span class="fids-row__loc" data-role="fids-loc">
-        <span data-role="fids-loc-main">${escapeHtml(parts.main)}</span><span data-role="fids-loc-note">${escapeHtml(parts.note)}</span>
+        <span data-role="fids-loc-head">${escapeHtml(parts.head)}</span><span data-role="fids-loc-note">${escapeHtml(parts.note)}</span><span data-role="fids-loc-tail">${escapeHtml(parts.tail)}</span>
       </span>
     </div>
   `;
@@ -866,10 +992,12 @@ function renderFids(all, now) {
       el.className = `fids-st ${FIDS_PHASE_CLASS[st.phase]}`;
     }
     const parts = fidsLocParts(trip, now, CHECKPOINTS[trip.route], CAMPUS[trip.route]);
-    const locMain = row.querySelector('[data-role="fids-loc-main"]');
+    const locHead = row.querySelector('[data-role="fids-loc-head"]');
     const locNote = row.querySelector('[data-role="fids-loc-note"]');
-    if (locMain) locMain.textContent = parts.main;
+    const locTail = row.querySelector('[data-role="fids-loc-tail"]');
+    if (locHead) locHead.textContent = parts.head;
     if (locNote) locNote.textContent = parts.note;
+    if (locTail) locTail.textContent = parts.tail;
   });
 }
 
@@ -896,24 +1024,82 @@ function tick() {
   const n = now();
   const nowDate = new Date(n);
   const todayStr = beijingTodayStr();
-  const display = state.viewDate ? { trips: activeTrips(dateFromStr(state.viewDate)), refDate: dateFromStr(state.viewDate) } : activeTripsForNow();
+  let display;
+  if (state.viewDate) {
+    const refDate = dateFromStr(state.viewDate);
+    display = { trips: viewTripsFor(state.viewDate), refDate };
+  } else {
+    display = activeTripsForNow();
+  }
   // 记录「即将开行」实际展示日期，供 avail 拉取/键使用（末班后=明日，避免拿今日旧值）
   state.displayDate = display.refDate ? dateStrOf(display.refDate) : null;
   const displayAll = computeForDate(display.trips, n, display.refDate);
   const todayAll = computeForDate(activeTrips(nowDate), n, nowDate);
   dom.clock.textContent = formatClock(nowDate);
   dom.clock.setAttribute("datetime", nowDate.toISOString());
-  dom.scheduleBadge.textContent = badgeText(display.refDate, nowDate);
+  // 时刻表徽标：源站实车推断优先（调休/节假日），否则静态节假日表
+  const dispDateStr = display.refDate ? dateStrOf(display.refDate) : todayStr;
+  dom.scheduleBadge.textContent = badgeText(display.refDate, nowDate, state.scheduleKindByDate.get(dispDateStr) || null);
   renderTrack(todayAll, n);
   renderRunningList(todayAll, n);
   renderUpcoming(displayAll, n);
   renderStatus(displayAll, n);
   renderFids(todayAll, n);
+  renderHistoryPanel();
   renderTrafficNote(n);
+  renderAmapDuration();
   renderDateNav();
   if (state.fidsAutoScroll) {
     autoScrollFids();
     state.fidsAutoScroll = false;
+  }
+}
+
+/* ===== 历史记录面板：班次 + 余票（历史口径）+ 满载率统计 ===== */
+function renderHistoryPanel() {
+  const s = viewDateStr();
+  const isPast = s < beijingTodayStr();
+  dom.historyPanel.hidden = !isPast;
+  if (!isPast) return;
+  dom.historyPanelTitle.textContent = `历史记录 · ${fmtDateLabel(s)}`;
+  const h = state.history;
+  if (!h || h.date !== s || !Array.isArray(h.trips)) {
+    dom.historyStats.hidden = true;
+    dom.historyList.hidden = true;
+    dom.historyEmpty.hidden = false;
+    dom.historyEmpty.textContent = "当日无快照（源站未采集到该日班次数据，仅保留最近 7 天）。";
+    return;
+  }
+  // 满载率统计（每帧更新，文本便宜）
+  const st = h.stats || {};
+  const day = st.day || {};
+  const cumW = st.cumulative && st.cumulative.weekday ? st.cumulative.weekday : null;
+  const cumE = st.cumulative && st.cumulative.weekend ? st.cumulative.weekend : null;
+  const pct = (r) => (r == null ? "—" : `${Math.round(r * 100)}%`);
+  dom.historyStats.hidden = false;
+  dom.historyStats.title = "满载率 = 已售座位 / 总座位（按趟座位加权累计）";
+  dom.historyStats.textContent = `当日满载率 ${pct(day.loadRatio)}（${day.tripCount ?? 0} 班）｜累计·工作日 ${pct(cumW && cumW.loadRatio)}（${cumW ? cumW.days : 0}天）｜累计·周末 ${pct(cumE && cumE.loadRatio)}（${cumE ? cumE.days : 0}天）`;
+  // 班次列表（仅数据变化时重建）
+  const sig = `${s}|${h.trips.length}`;
+  dom.historyEmpty.hidden = true;
+  if (sig !== state.historySig) {
+    state.historySig = sig;
+    const rows = h.trips.slice().sort((a, b) => (a.route === b.route ? (a.dep < b.dep ? -1 : 1) : a.route < b.route ? -1 : 1));
+    dom.historyList.hidden = rows.length === 0;
+    dom.historyList.innerHTML = rows.map((t) => {
+      const label = ROUTE_LABEL[t.route] || t.route || "";
+      const avail = t.available;
+      const hasLoad = t.total != null && t.total > 0 && avail != null;
+      const load = hasLoad ? `${Math.round(((t.total - avail) / t.total) * 100)}%` : "—";
+      const availTxt = avail == null ? "—" : avail > 0 ? `余${avail}` : "售罄";
+      const price = t.price ? `<span class="tag${t.price === "¥0.00" ? " tag--free" : " tag--paid"}">${escapeHtml(t.price)}</span>` : "";
+      return `<li class="history-item">
+        <span class="history-item__route">${escapeHtml(label)}${price}</span>
+        <span class="history-item__dep">${escapeHtml(t.dep)}</span>
+        <span class="history-item__avail">${availTxt}</span>
+        <span class="history-item__load">${load}</span>
+      </li>`;
+    }).join("");
   }
 }
 
@@ -1015,6 +1201,7 @@ function closeReminderGuide(delayMs) {
 }
 
 function promptReminder(trip) {
+  markAsked(); // 引导只询问一次（此后不再弹「触发了抢票提醒」）
   pendingReminderTrip = trip;
   dom.reminderGuideText.textContent = "你刚刚触发了「添加抢票提醒功能」，是否要保留此功能？";
   dom.reminderGuideYes.hidden = false;
@@ -1084,7 +1271,14 @@ async function applyReminder(trip, method, dateStr) {
     message = "设置提醒失败，请稍后重试";
   }
   dom.reminderGuideMethods.hidden = true;
-  dom.reminderGuideHint.textContent = message;
+  if (dom.reminderGuide.hidden) {
+    // 直接设置路径（一次性引导之外）：弹出结果反馈 1.6s，避免「点了没反应」
+    dom.reminderGuideText.textContent = message || "已更新提醒设置";
+    dom.reminderGuideHint.textContent = "";
+    dom.reminderGuide.hidden = false;
+  } else {
+    dom.reminderGuideHint.textContent = message;
+  }
   closeReminderGuide(1600);
   state.upcomingSig = "";
   tick();
@@ -1115,11 +1309,12 @@ function handleTripReminderClick(trip, dateStr) {
     return;
   }
   const pref = readPref();
-  if (!pref.askedOnce) {
-    promptReminder(trip);
+  if (!hasBeenAsked()) {
+    promptReminder(trip); // 首次：询问 1 次并记住
     return;
   }
-  // 只问一次后：按默认方式直接设置
+  // 已询问过：启用则按默认方式直接设置；未启用（设置之后不提醒）→ 点击无反应
+  if (!pref.askedOnce) return;
   applyReminder(trip, pref.method, dateStr);
 }
 
@@ -1210,6 +1405,15 @@ function bindReminderOverlay() {
   });
 }
 
+// 预取近 7 天历史日期列表（驱动日期选择器可用范围提示）
+async function initHistoryDates() {
+  try {
+    state.historyDates = await fetchHistoryDates();
+  } catch {
+    state.historyDates = [];
+  }
+}
+
 /* ===== Init ===== */
 hideXishanUi();
 bindTheme();
@@ -1225,6 +1429,7 @@ bindReminderSettings();
 bindReminderIcsHint();
 bindReminderOverlay();
 initAvailBridge();
+initHistoryDates();
 initTraffic((data) => {
   state.trafficLive = data;
   state.upcomingSig = "";
