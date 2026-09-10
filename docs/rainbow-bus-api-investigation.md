@@ -84,6 +84,10 @@ Pages Function GET /api/rainbow ──读R2解密──▶ routesByArea(area=380
   参考实现 + 流程：`workspace/rainbow-cookie-refresh-20260910/`（AnAgent 共享工作区）。
 - **Function**：`functions/api/rainbow.js`（GET，`?refresh=1` 强制）；纯函数 `functions/_shared/rainbow.js`
   （`parseEnvelope`/`countSeats`/`mapRouteToBoard`/`pickBoardRoutes`/`buildTrips`）。
+  **日期范围 today..today+5**（`FUTURE_DAYS=5`）：`searchPlanDates` 的多日 plan 按范围过滤后逐 plan 取座位，
+  未来班次视图据此并入彩虹班次（school `get-list` 不含彩虹）。
+- **鉴权失败**：session 过期源站返回 `{success:false,code:401,msg:"登录已过期…"}`，`rbPost` 识别为失败并抛错
+  （响应 `source:"degraded"` + R2 `rainbow/last-failed.json`），不会误当「无班次」。
 - **方向映射**：线路名「良乡-中关村」→ 板内 a（早班），「中关村-良乡」→ c（晚班）；仅取名称含「理工」的线路。
 - **TTL/刷新**：R2 live 缓存 `minTtl=300s` + SWR，前端 `lib/rainbow.js` 同款轮询，与 `/api/availability` 一致；
   ⟳ 手动刷新同时重拉彩虹。

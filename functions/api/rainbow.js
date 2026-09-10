@@ -12,6 +12,7 @@ import {
   buildTrips
 } from "../_shared/rainbow.js";
 import { beijingDateStr } from "../_shared/ttl.js";
+import { shiftDate } from "../_shared/metrics.js";
 
 const BASE = "http://www.rainbow-bus.cn";
 const UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49";
@@ -21,6 +22,7 @@ const OLNG = "116.407526";
 const OLAT = "39.904030";
 const PAGE_SIZE = 8;
 const MAX_PAGES = 5;
+const FUTURE_DAYS = 5; // 与前端 MAX_FUTURE_DAYS 一致：取 today..today+5
 const TIMEOUT_MS = 8000;
 
 const LIVE_KEY = "rainbow/live.json";
@@ -77,7 +79,12 @@ async function rbPost(path, params, cookie) {
       signal: ctrl.signal
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const data = await res.json();
+    // 源站鉴权失败：{success:false, code:401, msg:"登录已过期…"} → 视为失败降级（勿当空数据）
+    if (data && typeof data === "object" && !Array.isArray(data) && data.success === false) {
+      throw new Error(`rainbow ${data.code || "auth"}: ${data.msg || ""}`.slice(0, 120));
+    }
+    return data;
   } finally {
     clearTimeout(timer);
   }
@@ -112,6 +119,8 @@ async function refresh(bucket, env, nowMs) {
   const cookie = await decryptCookie(keyB64, envelope);
 
   const today = beijingDateStr(nowMs);
+  const dates = new Set();
+  for (let i = 0; i <= FUTURE_DAYS; i++) dates.add(shiftDate(today, i));
 
   // 1) 理工大学线路（翻页，每页 8）
   const allRoutes = [];
@@ -128,16 +137,16 @@ async function refresh(bucket, env, nowMs) {
   }
   const entries = pickBoardRoutes(allRoutes);
 
-  // 2) 各线路今日 plan
+  // 2) 各线路 今日..+5 的 plan
   const plansByRoute = new Map();
   const planIds = [];
   for (const e of entries) {
     const plans = await rbPost("/rainbow/wechat/p/searchPlanDates", { routeId: e.routesId }, cookie);
     const arr = Array.isArray(plans) ? plans : (plans && plans.data) || [];
-    const todayPlans = arr.filter((p) => p && p.id !== "" && p.id != null && p.service_date === today);
-    if (todayPlans.length) {
-      plansByRoute.set(e.routesId, todayPlans);
-      for (const p of todayPlans) planIds.push(p.id);
+    const rangePlans = arr.filter((p) => p && p.id !== "" && p.id != null && dates.has(p.service_date));
+    if (rangePlans.length) {
+      plansByRoute.set(e.routesId, rangePlans);
+      for (const p of rangePlans) planIds.push(p.id);
     }
   }
 
