@@ -1,4 +1,4 @@
-import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-28";
+import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-29";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260910-28";
-import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-28";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260910-28";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-28";
+} from "./lib/schedule.js?v=20260910-29";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-29";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-29";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-29";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -28,8 +28,9 @@ import {
   tripAgeMs,
   availAgeMs,
   fetchHistoryDates
-} from "./lib/availability.js?v=20260910-28";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-28";
+} from "./lib/availability.js?v=20260910-29";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-29";
+import { initRainbow, refreshRainbowNow, rainbowAvailText, rainbowAgeMs } from "./lib/rainbow.js?v=20260910-29";
 import {
   readPref,
   savePref,
@@ -53,7 +54,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260910-28";
+} from "./lib/reminder.js?v=20260910-29";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -140,6 +141,7 @@ const state = {
   viewDate: null, // null=跟随真实今天；否则 'YYYY-MM-DD'
   displayDate: null, // 实际展示日期（末班后=明日；avail 数据 date 以它为准）
   availMap: new Map(), // `${route}|${dep}` → avail
+  rainbowMap: new Map(), // `${date}|${route}|${dep}` → 彩虹实车余座 {seatsTotal,seatsTaken,seatsLeft}
   traffic: null,
   trafficLive: null,
   futureTrips: new Map(), // 未来日期 → 源站实车 trips（批量接口）
@@ -297,6 +299,21 @@ function initAvailBridge() {
     state.upcomingSig = "";
     state.fidsSig = "";
     state.historySig = "";
+    tick();
+  });
+}
+
+// 彩虹巴士实车余座（/api/rainbow）：键 `${serviceDate}|${route}|${dep}`，供主屏彩虹卡 + PIDS 使用。
+function initRainbowBridge() {
+  initRainbow((data) => {
+    const map = new Map();
+    for (const t of (data && data.trips) || []) {
+      if (!t || !t.boardRoute || !t.dep) continue;
+      map.set(`${t.serviceDate}|${t.boardRoute}|${t.dep}`, t);
+    }
+    state.rainbowMap = map;
+    state.upcomingSig = "";
+    state.fidsSig = "";
     tick();
   });
 }
@@ -791,7 +808,9 @@ function updateTripAvail(li, trip) {
   if (!avEl) return;
   const key = `${displayDateStr()}|${trip.route}|${trip.dep}`;
   const a = state.availMap.get(key) || null;
-  const view = mainAvailText({ ...trip, avail: a });
+  const rb = trip.rainbow ? state.rainbowMap.get(key) || null : null;
+  // 彩虹优先用实车余座（rainbowAvailText）；无数据回退占位（mainAvailText 对彩虹返回 "--"）
+  const view = (rb && rainbowAvailText(rb)) || mainAvailText({ ...trip, avail: a });
   const clearLabel = () => { if (lEl) { lEl.textContent = ""; lEl.className = "trip-item__avail-l"; } };
   if (!view) {
     avEl.textContent = "";
@@ -799,7 +818,7 @@ function updateTripAvail(li, trip) {
     clearLabel();
     return;
   }
-  // 彩虹/占位 "--"：小号灰色，不显示「余」标签与数据龄
+  // 占位 "--"（彩虹无数据）：小号灰色，不显示「余」标签与数据龄
   if (view.value === "--") {
     avEl.className = "trip-item__avail avail--none";
     clearLabel();
@@ -807,7 +826,7 @@ function updateTripAvail(li, trip) {
     return;
   }
   avEl.className = view.color ? `trip-item__avail avail--${view.color}` : "trip-item__avail";
-  const ageMs = tripAgeMs(trip.route, trip.dep, displayDateStr()) ?? availAgeMs();
+  const ageMs = rb ? rainbowAgeMs() : (tripAgeMs(trip.route, trip.dep, displayDateStr()) ?? availAgeMs());
   const ttlText = ageMs == null ? "数据获取中…" : `数据是${Math.max(1, Math.round(ageMs / 60000))}分钟前`;
   // 售罄不显示「余」（置于 row1 行右侧）；数字+数据龄留在 avail 块
   const label = view.value === "售罄" ? "" : "余";
@@ -980,7 +999,8 @@ function renderFids(all, now) {
     row.style.setProperty("--pct", `${st.phase === "dep" ? Math.round(trip.progress * 100) : 0}%`);
     const key = `${beijingTodayStr()}|${trip.route}|${trip.dep}`;
     const a = state.availMap.get(key) || null;
-    const pv = pidsAvailText({ ...trip, avail: a });
+    const rb = trip.rainbow ? state.rainbowMap.get(key) || null : null;
+    const pv = pidsAvailText({ ...trip, avail: a, rainbowData: rb });
     const pctEl = row.querySelector('[data-role="fids-pct"]');
     if (pctEl) {
       pctEl.textContent = pv.text;
@@ -1156,6 +1176,7 @@ function bindRefreshBtn() {
   const doRefresh = () => {
     refreshAvailNow();
     refreshTrafficNow();
+    refreshRainbowNow();
     state.upcomingSig = "";
     state.fidsSig = "";
     tick();
@@ -1429,6 +1450,7 @@ bindReminderSettings();
 bindReminderIcsHint();
 bindReminderOverlay();
 initAvailBridge();
+initRainbowBridge();
 initHistoryDates();
 initTraffic((data) => {
   state.trafficLive = data;

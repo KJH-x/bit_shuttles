@@ -2,7 +2,7 @@ export const DURATION_MIN = 60;
 
 export const DURATION_BY_ROUTE = {};
 
-export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260910-28";
+export { DURATION_PROFILES, DURATION_PROFILE_NOTES } from "./lib/duration-profiles.js?v=20260910-29";
 
 import { TRIPS, TRIPS_WEEKEND } from "./lib/schedule-tables.js";
 export { TRIPS, TRIPS_WEEKEND } from "./lib/schedule-tables.js";

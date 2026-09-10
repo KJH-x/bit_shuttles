@@ -68,3 +68,25 @@ POST /rainbow/wechat/b/getBusSeatsWechat 某班次(plan)的座位图（含已占
 5. **页面入口（调试用）**：
    - 列表页 `http://www.rainbow-bus.cn/rainbow/wechat/sba?op=olng:116.407526,olat:39.904030,...,area:3804,...,cityId:1`（URL 编码）
    - 详情 `/rainbow/wechat/sbc?routesId=<id>`；选座 `/rainbow/wechat/seats?routesId=&startId=&endId=`
+
+## 4. 自动化链路（已落地 v1.29）
+
+```
+机器A(自有脚本取 connect.sid) ──AES-256-GCM(共享key)──▶ 信封JSON ──SigV4 PUT──▶ R2 rainbow/cookie.enc
+Pages Function GET /api/rainbow ──读R2解密──▶ routesByArea(area=3804,翻页) ──▶ searchPlanDates{routeId}(今日plan)
+   ──▶ getBusSeatsWechat{planId}(并发≤3) ──▶ R2 rainbow/live.json(300s SWR) ──▶ 前端 lib/rainbow.js
+```
+
+- **加密**：AES-GCM-256 对称（`keyA=keyB`，Pages secret `RAINBOW_COOKIE_KEY` 与机器 A `RAINBOW_AES_KEY` 同值）。
+  信封 `{"v":1,"alg":"AES-GCM-256","iv":<b64 12B>,"ts":<ms>,"dataC":<b64(cipher‖tag)>}`；
+  `ts` 超 7 天 Worker 判 stale（仍尝试解密，失败记 `rainbow/last-failed.json`）。
+- **上传**：SigV4 PUT `rainbow/cookie.enc`（复用 `functions/_shared/r2-sign.js#putObject` + 用户级 `BITBUS_R2_*`）。
+  参考实现 + 流程：`workspace/rainbow-cookie-refresh-20260910/`（AnAgent 共享工作区）。
+- **Function**：`functions/api/rainbow.js`（GET，`?refresh=1` 强制）；纯函数 `functions/_shared/rainbow.js`
+  （`parseEnvelope`/`countSeats`/`mapRouteToBoard`/`pickBoardRoutes`/`buildTrips`）。
+- **方向映射**：线路名「良乡-中关村」→ 板内 a（早班），「中关村-良乡」→ c（晚班）；仅取名称含「理工」的线路。
+- **TTL/刷新**：R2 live 缓存 `minTtl=300s` + SWR，前端 `lib/rainbow.js` 同款轮询，与 `/api/availability` 一致；
+  ⟳ 手动刷新同时重拉彩虹。
+- **前端展示**：主屏彩虹卡有数据 → `余N`/`售罄`（配色同余票），无数据 → 灰色 `--`；
+  PIDS 满载率列有数据 → `NN%`，无数据 → `🌈`。
+
