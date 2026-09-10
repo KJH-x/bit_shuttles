@@ -1,4 +1,4 @@
-import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-23";
+import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-25";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260910-23";
-import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-23";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260910-23";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-23";
+} from "./lib/schedule.js?v=20260910-25";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-25";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-25";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-25";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -28,8 +28,8 @@ import {
   tripAgeMs,
   availAgeMs,
   fetchHistoryDates
-} from "./lib/availability.js?v=20260910-23";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-23";
+} from "./lib/availability.js?v=20260910-25";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-25";
 import {
   readPref,
   savePref,
@@ -52,7 +52,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260910-23";
+} from "./lib/reminder.js?v=20260910-25";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };

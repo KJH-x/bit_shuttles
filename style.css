@@ -1330,6 +1330,8 @@ section[aria-labelledby="runningTitle"] .panel__head {
   background: var(--surface-2);
 }
 
+/* PIDS 运行中进度 = 路线色渐变条：渐变宽度即 --pct，进度信息直接由渐变长度表达。
+   fwd（a/d，良乡/西山→中关村）从左往右渐变；rev（c/e）从右往左渐变（与运行详情 .running-item 一致）。 */
 .fids-row--run::before {
   content: "";
   position: absolute;
@@ -1337,30 +1339,29 @@ section[aria-labelledby="runningTitle"] .panel__head {
   left: 0;
   right: auto;
   width: var(--pct, 0%);
-  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 28%, transparent), color-mix(in srgb, var(--dir-a) 6%, transparent));
   pointer-events: none;
   z-index: 0;
 }
 
 .fids-row--run[data-route="a"]::before {
-  background: color-mix(in srgb, var(--dir-a) 18%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 28%, transparent), color-mix(in srgb, var(--dir-a) 6%, transparent));
 }
 
-/* rev（c/e，中关村/西山发车）：进度从右往左累加（与运行详情 .running-item 一致） */
 .fids-row--run[data-route="c"]::before {
-  background: color-mix(in srgb, var(--dir-c) 18%, transparent);
   left: auto;
   right: 0;
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-c) 28%, transparent), color-mix(in srgb, var(--dir-c) 6%, transparent));
 }
 
 .fids-row--run[data-route="d"]::before {
-  background: color-mix(in srgb, var(--dir-d) 18%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-d) 28%, transparent), color-mix(in srgb, var(--dir-d) 6%, transparent));
 }
 
 .fids-row--run[data-route="e"]::before {
-  background: color-mix(in srgb, var(--dir-e) 18%, transparent);
   left: auto;
   right: 0;
+  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-e) 28%, transparent), color-mix(in srgb, var(--dir-e) 6%, transparent));
 }
 
 .fids-row--run[data-rainbow="true"]::before {
@@ -1370,39 +1371,6 @@ section[aria-labelledby="runningTitle"] .panel__head {
     rgba(74, 222, 128, .32),
     rgba(96, 165, 250, .32),
     rgba(167, 139, 250, .32));
-}
-
-/* PIDS 静止路况波前：仿主页波纹但无动画，静止跟随 --pct（由 renderFids 每帧更新） */
-.fids-row--run::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 34%;
-  left: var(--pct, 0%);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 60%, transparent), transparent);
-  opacity: .30;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.fids-row--run[data-route="a"]::after {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-a) 60%, transparent), transparent);
-}
-
-/* rev（c/e，中关村/西山发车）：波前在右，从右向左渐隐 */
-.fids-row--run[data-route="c"]::after,
-.fids-row--run[data-route="e"]::after {
-  left: auto;
-  right: var(--pct);
-  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-c) 60%, transparent), transparent);
-}
-
-.fids-row--run[data-route="d"]::after {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--dir-d) 60%, transparent), transparent);
-}
-
-.fids-row--run[data-route="e"]::after {
-  background: linear-gradient(270deg, color-mix(in srgb, var(--dir-e) 60%, transparent), transparent);
 }
 
 .fids-row > * {
@@ -1731,12 +1699,6 @@ section[aria-labelledby="runningTitle"] .panel__head {
   line-height: 1;
   color: var(--muted);
   font-variant-ligatures: none; /* 保持 "--" 两个独立连字符 */
-}
-
-/* 彩虹/无数据占位 "--"：小号灰色 */
-.trip-item__avail.avail--none .trip-item__avail-n {
-  font-size: .95rem;
-  font-weight: 700;
 }
 
 .trip-item__avail-ttl {
