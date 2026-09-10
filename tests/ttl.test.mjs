@@ -27,14 +27,14 @@ import { mainAvailText } from "../lib/availability.js";
 const MIN = 60000;
 const T = Date.UTC(2026, 8, 4, 10, 0, 0) - 8 * 3600 * 1000; // Beijing 2026-09-04 10:00
 
-test("md5: 双重 MD5 签名与实测一致", () => {
+test("md5: 双重 MD5 签名与独立预计算摘要一致", () => {
   const secret = "test-secret-not-production";
   const t = "1788489975368";
-  const expected = md5Hex(md5Hex(secret + t));
-  assert.equal(md5Hex(md5Hex(secret + t)), expected);
+  // 独立预计算（PowerShell/openssl 一致）：md5(md5(secret+t))
+  assert.equal(md5Hex(md5Hex(secret + t)), "dcd78a8ea923b483dd3ef4b31d2f105a");
   const sig = sign(secret, Number(t));
   assert.equal(sig.apitime, "1788489975368");
-  assert.equal(sig.apitoken, expected);
+  assert.equal(sig.apitoken, "dcd78a8ea923b483dd3ef4b31d2f105a");
   // 生产 secret 回归：仅当显式提供 SCHOOL_TEST_SECRET 时校验（避免硬编码进仓库）
   const prod = process.env.SCHOOL_TEST_SECRET;
   if (prod) {

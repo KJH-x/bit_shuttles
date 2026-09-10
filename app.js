@@ -1,4 +1,4 @@
-import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260904-20";
+import { ROUTES, TRIPS_WEEKEND, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, isWeekend, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-21";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260904-20";
-import { now, syncClock } from "./lib/time.js?v=20260904-20";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260904-20";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260904-20";
+} from "./lib/schedule.js?v=20260910-21";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-21";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-21";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-21";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -27,8 +27,8 @@ import {
   pidsAvailText,
   tripAgeMs,
   availAgeMs
-} from "./lib/availability.js?v=20260904-20";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260904-20";
+} from "./lib/availability.js?v=20260910-21";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-21";
 import {
   readPref,
   savePref,
@@ -49,7 +49,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260904-20";
+} from "./lib/reminder.js?v=20260910-21";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -143,7 +143,7 @@ function badgeText(refDate, nowDate) {
 }
 
 function beijingTodayStr() {
-  return new Date(now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  return toBeijingDateStr(now());
 }
 
 function viewDateStr() {

@@ -8,8 +8,8 @@
 // 真实余票 = reservation_num − disable_seat 数（disable 座位不可约，reservation_num 含它们）。
 
 import { host, fetchJson } from "../_shared/school.js";
+import { json, cacheHeaders } from "../_shared/response.js";
 import {
-  beijingNowMs,
   beijingDateStr,
   depToMs,
   paidPhaseTtl,
@@ -37,30 +37,17 @@ import { shiftDate } from "../_shared/metrics.js";
 const MAX_ATTEMPTS = 3;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEP_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-const MAX_TS_SKEW_MS = 30 * 60000;
 const LIVE_DEFAULT_TTL = 60;
 const META_TTL = 300; // get-list 元数据缓存（封顶 5 分钟）
 const ROUTES_OK = new Set(["a", "c", "d", "e"]);
-
-function json(data, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...extraHeaders }
-  });
-}
 
 function makeSchoolUrls(path, schemeOrder) {
   return host(schemeOrder).map((h) => h + path);
 }
 
-function cacheHeaders(ttl) {
-  // 浏览器/边缘一律不缓存：新鲜度由 R2 缓存 + SWR（服务端 waitUntil 后台刷新）保证，
-  // 前端每次轮询都打回服务端，避免「刷新不更新、须 Ctrl+F5」的旧缓存问题。
-  return { "Cache-Control": "private, no-store" };
-}
-
 // 单趟计算：available = reservation_num − disable_seat 数；total = reserved + reservation_num − disable
-function computeTrip(row, seatData, nowMs, date, isToday) {
+// 导出纯函数供单测（tests/availability.test.mjs）。
+export function computeTrip(row, seatData, nowMs, date, isToday) {
   const route = NAME_TO_ROUTE[row.name];
   if (!route) return null;
   const dep = row.origin_time;
@@ -182,14 +169,7 @@ export async function onRequest({ request, env, waitUntil }) {
   const depParam = url.searchParams.get("dep");
   const date = dateParam && DATE_RE.test(dateParam) ? dateParam : beijingDateStr(Date.now());
 
-  const tsParam = url.searchParams.get("_t");
-  if (tsParam) {
-    const t = Number(tsParam);
-    if (!Number.isFinite(t) || Math.abs(t - beijingNowMs()) > MAX_TS_SKEW_MS) {
-      return json({ error: "clock_skew" }, 400);
-    }
-  }
-
+  // 时间校验策略（Q6 已确认「仅服务端校时」）：不接收客户端 _t，故无时钟偏斜分支。
   const bucket = env.AVAIL_BUCKET;
   const secret = env.SCHOOL_SECRET;
   const schemeOrder = env.SCHOOL_SCHEME_ORDER || "https,http";

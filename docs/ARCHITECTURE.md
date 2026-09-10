@@ -5,7 +5,7 @@
 
 ## 1. 一句话定位
 
-北京理工大学「良乡 ⇄ 中关村」工作日校园班车的**纯静态实时页面**：浏览器本地每秒推算班次状态（未发车 / 已发车 / 运行中），无后端、无 R2、无 Worker，托管于 Cloudflare Pages（`https://bitbus.nslc.top`，GitHub `KJH-x/bit_shuttles` push 自动构建）。
+北京理工大学「良乡 ⇄ 中关村」工作日校园班车页面：**静态前端（浏览器本地实时推算）+ Cloudflare Pages Functions（余票实时查询 `/api/availability`、高德路况 `/api/traffic`）+ R2 缓存/历史（`campus-shuttle-avail`）**。托管于 Cloudflare Pages（`https://bitbus.nslc.top`，GitHub `KJH-x/bit_shuttles` push 自动构建）。
 
 ## 2. 页面结构（自上而下）
 
@@ -69,6 +69,24 @@ site-footer：数据说明
 | 购票 1h 提前开售、5 分钟售罄 | 实测一般班次开售 5 分钟内售罄；免费班次全天可约；彩虹全周可约 |
 | 耗时封顶 1 小时 | 公交专用道使班车通常比轿车快，高德轿车预测可超 1h，故统一 `min(…,60)`；原预测值仍保留于 `duration-profiles.js` 供日后校准 |
 | 版本化查询串破缓存 | `bitbus.nslc.top` 的 zone 层会把 `_headers` 的 `no-cache` 覆盖为 `max-age=14400`，曾导致「加载中」卡死（旧模块缺新导出）。改发版时统一 bump `index.html`/`app.js`/`schedule-data.js` 里的 `?v=20260901-N` |
+| 余票缓存架构 = R2 + SWR（非 caches.default） | v1.18 实测：`Cache-Control: public, max-age` 被浏览器按 URL 固定缓存、sw.js 又缓存全部同源 GET，导致「刷新不更新、须 Ctrl+F5」。改为 **R2 为主缓存 + waitUntil 后台刷新（stale-while-revalidate）+ 响应 `private, no-store`**，前端 `cache:"no-store"` 轮询，刷新即见新数据 |
+| 余票 TTL 全部封顶 ≤5min | v1.25 用户要求：余票变化需及时反映，故 `paidPhaseTtl` 预售 3600→300s、常规 180→60s；`freeTtl` 恒 300s；`META_TTL`/前端 `normTtl`/`bulkTimer` 同步封顶 ≤300s |
+| PIDS 显示「满载率」= 100−余票率 | v1.16 用户要求 PIDS 以整数百分比展示满载程度，非规划初稿的余票率；表头即「满载率」 |
+| 主屏无「数字/百分比」切换按钮 | v1.15 用户要求精简：改为混合显示（有余票数显数字、仅余票率显百分比），删除切换按钮（`.avail-toggle` 为残留 CSS） |
+| **高德 §3.8「每班次 T-1h/T 两次定点查询」未实现（替代方案）** | **根因**：Cloudflare **Pages Functions 不支持 Cron Triggers**（兼容矩阵 Workers✅/Pages❌），无法在 `T-1h`/`T` 精准定时触发固定查询。**当前方案 = 暂定的可用性替代**：本地计划任务「bitbus-amap-refresh」每 10 分钟轮询双方向经 SigV4 直写 R2，`/api/traffic` 纯读。**在找到更好方案前不再更改**。演进史：此前最接近解 = GitHub Actions 触发 Pages Function 拉取写 R2；现改为本地脚本直推（弃用 GH Actions，免额外 secret/公开部署面） |
+| 颜色/窗口/TTL 常量以代码为唯一事实来源 | v1.26 复用性清理：`wrangler.toml` 曾声明 `AVAIL_THRESHOLD_*`/`VISIBLE_WINDOW_MIN` 等 vars 但代码零读取（且与代码数值冲突 YELLOW=10 vs ≥6），已删除死配置；常量收敛到 `functions/_shared/ttl.js`（后端）与 `lib/availability.js`（前端） |
+
+## 5.1 R2 bucket 布局（`campus-shuttle-avail`）
+
+| key | 内容 | 写入方 | 读取方 |
+| --- | --- | --- | --- |
+| `avail/{YYYY-MM-DD}.json` | 每日余票快照（保留 7 天） | `functions/_shared/history.js#writeSnapshot`（批量刷新时） | `#readSnapshot`（历史日期接口） |
+| `avail/cumulative.json` | 超 7 天的累计统计（工作日/周末，天数加权） | `#rollupExpiredSnapshots` | `#trafficForToday` |
+| `avail/live/{YYYY-MM-DD}.json` | 批量 live 缓存（`minTtl`+`traffic`+`trips`） | `#writeLiveCache` | `#readLiveCache` |
+| `avail/meta/{YYYY-MM-DD}.json` | get-list 元数据（id/name/dep 映射，≤5min） | `#writeMetaCache` | `#readMetaCache` |
+| `avail/trip/{YYYY-MM-DD}/{route}-{dep}.json` | 单趟余票缓存（SWR） | `#writeTripCache` | `#readTripCache` |
+| `avail/last-failed.json` | 源站不可达失败日志 | `#writeLastFailed` | 运维排障 |
+| `traffic/live.json` | 高德实时路况（fwd/rev 三分段） | 本地脚本 `amap-refresh.mjs`（SigV4 PUT） | `functions/_shared/traffic-cache.js#readTrafficLive` → `/api/traffic` |
 
 ## 6. 改动历史
 
@@ -100,10 +118,11 @@ site-footer：数据说明
 | v1.23 | 2026-09-07 | **抢票提醒 + 钉钉跳转 + 数据源 URL 归档**：① **提醒交互**——点击班次卡片弹引导（`app.js#promptReminder`）：检查 `isPwa()`，PWA 才显示「添加到日历 / PWA 提醒 / 两者都要」三选项，非 PWA 提示装主屏幕并降级日历；「否」→ `bitbus-reminder-dismissed` 不再提示（可顶部 🔔 重开）；② **顶部设置按钮**——`#reminderBtn` 打开 `#reminderSettings`：启用总开关 + 子项（添加到日历 / PWA 提醒），非 PWA 时 PWA 子项 `is-disabled` 灰显（`renderReminderSettings`）；③ **实现**——`lib/reminder.js`（PWA 检测/设置存储/ICS 生成含 VALARM/`schedulePwaNotify` 到点 `Notification`/`openDingTalk` 钉钉 scheme），`sw.js#notificationclick` 点通知打开钉钉；抢票时刻 = T-1h−offset（默认 3min）；④ **钉钉跳转目标** = 数据源班次列表界面 `http://hqapp1.bit.edu.cn/newbanche/home`（URL 已归档 README「数据源界面」，勿重复探测）；⑤ **调查**：Android 衍生系统（小米/华为鸿蒙/一加/ vivo）提醒方案报告 `workspace/reminder-dingding-demo-20260907/ANDROID-REPORT.md`（ICS 导入为通用主方案，Web Push 受大陆 ROM 自启动/电池限制仅增强，深链无法静默写日历）；测试页已补 PWA 通知演示；版本 `?v=20260904-16`，测试 82 项 | 当前 |
 | v1.24 | 2026-09-08 | **提醒交互重构（只问一次 + 金黄高亮 + 生命周期 + 非 PWA 隐藏 + ICS 提示）**：① **只询问 1 次**——`bitbus-reminder-pref`（`{askedOnce, method}`）首次引导后记住默认方式，之后点击班次按默认方式直接设置不再询问；「否」置 `askedOnce=false` 但仍可在设置面板开启；② **每班次独立可多选**——`bitbus-reminders`（`"日期|route|dep":{method,ts}`），`readReminders` 读取时自动清理过期条目（日期<今日）并设 `MAX_REMINDERS=100` 上限管理生命周期；③ **金黄高亮**——已设提醒班次 `.trip-item--reminded`（时间 `#d97706` 金 + 浅金底），按「日期+班次」限定，`renderList` 每帧 `hasReminder` 切换；④ **点击 = toggle**——已设→取消金黄移除；未设→首次询问/之后按默认；⑤ **非 PWA 不展示 PWA 选项**——引导方法区与设置面板 radio 中 PWA/两者 均隐藏/灰显（`isPwa()`）；⑥ **非 iOS Safari ICS 提示**——下载 .ics 后弹 `#reminderIcsHint`「通过日历打开导入」，支持「不再提醒」（`bitbus-reminder-ics-dismiss`）；iOS Safari 原生「添加到日历」不弹；⑦ `buildReminderIcs`/`schedulePwaNotify` 增加 `dateStr` 参数按指定日期生成；`isIosSafari()` 检测；版本 `?v=20260904-17`，测试 87 项 | 当前 |
 | v1.25 | 2026-09-09 | **余票 TTL 全部封顶 5 分钟 + 数据龄以服务端缓存时间为准 + 窗口外售罄消失修复**：① **TTL 封顶**——`functions/_shared/ttl.js#paidPhaseTtl` 预售 3600→`300`、`freeTtl` 全部恒 `300`（原 2h/30min/1day）；`availability.js` `META_TTL` 3600→300、历史快照 minTtl/cacheHeaders 3600→300；前端 `lib/availability.js#normTtl` 上限 3600→300、`bulkTimer` 上限 3600000→300000；② **数据龄以服务端缓存时间为准**——各响应出口新增 `dataFetchedAt`（逐车 cache=`cached.fetchedAt`、live=`live.fetchedAt`、实时新拉=`serverNow`）；前端 `availAgeMs`/`tripAgeMs` 改用 `dataFetchedAt`（R2 命中=缓存写入时间，非前端请求时刻，R2 返回不代表数据新）；③ **窗口外售罄消失修复**——`lib/availability.js#mainAvailText` 售罄判定由 `available===0` 改为 `available===0 || bookable<=0`（付费班次窗口外 `available=null`+`pct=0`+`bookable≤0` 时原返回 null 消失，现显示「售罄」）；版本 `?v=20260904-17`，测试 90 项 | 当前 |
+| v1.26 | 2026-09-10 | **复用性清理 + 单测补充 + 文档补全**（评审 REVIEW-20260906 落地）：① **wrangler.toml 删死 vars**——`AVAIL_THRESHOLD_*`/`VISIBLE_WINDOW_MIN`/`PAID_*_MIN` 代码零读取且与代码数值冲突（YELLOW=10 vs ≥6），删除；常量以 `functions/_shared/ttl.js`/`lib/availability.js` 为唯一事实来源；② **UTC+8 助手收敛**——`lib/time.js#toBeijingDateStr`（基于校正时钟），`lib/availability.js`/`lib/reminder.js`/`app.js` 统一引用（此前 4 份复制）；③ **route 映射收敛**——新建 `lib/traffic-routes.js`（FWD_ROUTE/REV_ROUTE/trafficDirForRoute），`lib/traffic.js` 引用，`amap.js#ROUTE_CFG` 加注释声明与前端一致，`tests/route-lock.test.mjs` 交叉锁定；④ **抽 `functions/_shared/response.js`**（`json()`/`cacheHeaders()`）供两个 api 共用；⑤ **删除 `_t` 死代码**（Q6 已定仅服务端校时，无调用方）；⑥ **SigV4 抽 `functions/_shared/r2-sign.js`**（signV4/putObject/getObject，`signV4` 支持 `contentType:null` 与 `extraHeaders`），`amap-refresh.mjs` 改用 `BITBUS_PROJECT_DIR` env 解析路径 + 复用 r2-sign（删除本地 signV4/putObject/readOld 重复实现）；⑦ **单测**——新增 `availability.test.mjs`（`computeTrip` 导出：rn−disable 口径/免费恒有/窗口外 null/超额售罄钳制/总座席/防除零/TTL 阶段）、`school.test.mjs`（签名/协议回退/重试3次/错误码/坏JSON）、`history.test.mjs`（快照/缓存/rollup 7天折累计/trafficForToday，内存 R2 mock）、`frontend-avail.test.mjs`（availColor/mainAvailText 含 v1.25 售罄判定/pidsAvailText）、`route-lock.test.mjs`、`r2sign.test.mjs`（金向量与 botocore 逐字节比对一致）；`ttl.test.mjs` md5 断言改独立预计算摘要；测试 **90→130 项** | 当前 |
 
 ## 7. 发版 Checklist（防坑）
 
 1. 改数据/样式/逻辑后：`node --test tests/` 全绿。
 2. 本地 `python -m http.server 8877`，用浏览器分别验证 ≥900px（两列+QR）与 ≤768px（单列、QR 隐藏、三行卡片）。
-3. 统一 bump 版本号：`index.html` 的 `style.css?v=` 与 `app.js?v=`、`app.js` 内部 import、`schedule-data.js` 的 re-export，四处同步改为 `20260902-N+1`（否则可能吃到 zone 层旧缓存）。
+3. 统一 bump 版本号：`index.html` 的 `style.css?v=` 与 `app.js?v=`、`app.js` 内部 import、`schedule-data.js` 的 re-export，四处同步改为 `20260904-N+1`；另需同步 `sw.js` 的 `CACHE_NAME`（否则可能吃到 zone/SW 层旧缓存）。
 4. commit + push `main` → CF Pages 自动构建（无构建命令，根目录部署）。token 无 Zone 权限，无法用 API 查部署状态，直接 curl 验证 `https://bitbus.nslc.top/` 返回 200 且含新版本号。

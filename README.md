@@ -1,6 +1,6 @@
 # campus-shuttle-board
 
-北京理工大学良乡 ⇄ 中关村（含西山）校园班车时刻表 — 纯静态页面，浏览器本地实时推算，无后端。自动区分工作日/周末时刻表（`isWeekend`/`activeTrips`）。
+北京理工大学良乡 ⇄ 中关村（含西山）校园班车时刻表 — 静态前端 + Cloudflare Pages Functions（余票实时查询、高德实时路况）+ R2 缓存/历史。浏览器本地实时推算班次状态，自动区分工作日/周末时刻表（`isWeekend`/`activeTrips`）。
 
 线上：`https://bitbus.nslc.top`（GitHub `KJH-x/bit_shuttles` → Cloudflare Pages 自动构建）。
 
@@ -20,7 +20,7 @@
 - **实时路线耗时（高德）**：两个静态链接按钮（良乡→中关村 / 中关村→良乡），区块上方一条灰色虚线分隔；**桌面端**（排除 iPad/Android pad）点击按钮才弹出一个二维码气泡提示用手机扫码打开导航（不再常显）。
 - **高德实时路况（`/api/traffic`）**：本地计划任务脚本（`workspace/campus-shuttle-amap-refresh-20260905/amap-refresh.mjs`，Windows 任务计划每 10 分钟）免鉴权拉取 `m.amap.com` driving.json（iPhone UA + Referer，无登录/无 key/无 cookie），SigV4 直写生产 R2 `traffic/live.json`；返回两条直连线路（良乡⇄中关村 36.5/36.8km）的**实时预计耗时 + 三分段路况色带**：
   - **读模式**：`GET /api/traffic`（纯读 Pages Function）→ R2 缓存直出 `{ available, fetchedAt, dirs:{ fwd, rev } }`，前端每 60s 轮询；**无需任何 Pages 环境变量/secret**（本地脚本用自己的 `BITBUS_R2_*` 凭据直写 R2）；
-  - **本地刷新脚本**：Pages 不支持 Cron Triggers，故用**本地计划任务**（而非 GitHub Actions）定时拉取并直写 R2；单方向失败保留旧值，双失败不上传（前端回退静态表）；`--dry` 仅拉取不上传；
+  - **本地刷新脚本**：Pages 不支持 Cron Triggers，故用**本地计划任务**（而非 GitHub Actions）定时拉取并直写 R2；单方向失败保留旧值，双失败不上传（前端回退静态表）；`--dry` 仅拉取不上传；<br>**注**：规划稿 §3.8 的「每班次 T-1h/T 两次定点查询」因 Pages 无 Cron 无法实现，当前为**暂定的可用性替代**（10 分钟轮询），详见 ARCHITECTURE §5；
   - **实时 ETA 仅在数据被拉取后生效**（数据龄 ≤30min，过期自动回退静态耗时表），生效时**所有需运行时间的计算**（运行图 marker 按段位移、预计到达、剩余、PIDS 进度、检查点）自动使用实时值；运行图 `lane--a/c` 的**圆角细条**（`lane__rail`）叠加半透明路况色带（fwd 正向 S1→S2→S3、rev 反向），高德区显示「路况更新于 HH:MM · N 分钟前」；
   - **数据新鲜度（v1.18）**：`/api/traffic` 与 `/api/availability` 均 `Cache-Control: private, no-store`，`sw.js` 对 `/api/*` 一律放行网络，前端 fetch 带 `cache:"no-store"` ——**刷新页面即见新数据，无需 Ctrl+F5**；仍可在「即将开行」右侧点 `⟳` 手动强刷；
   - **只取直连线路**（容差 ±0.3km，无匹配取最小耗时）；**严格丢弃** cost/红绿灯数/路径详情（不输出不存储）；**耗时不再 1 小时封顶**（实时与静态均不截断）。
@@ -61,14 +61,16 @@
 | `schedule-data.js` | 时刻表数据 + 运行耗时配置（改这里） |
 | `app.js` | 实时推算渲染 |
 | `lib/schedule.js` | 纯逻辑（班次状态、购票、耗时插值、格式化、T+10 文案） |
-| `lib/time.js` | 网络时间同步 |
-| `lib/availability.js` | 余票数据层（拉取 `/api/availability`、日期切换、数字/百分比、配色） |
+| `lib/time.js` | 网络时间同步 + `toBeijingDateStr`（UTC+8 日期，多模块共用） |
+| `lib/availability.js` | 余票数据层（拉取 `/api/availability`、日期切换、售罄判定、配色） |
+| `lib/traffic.js` | 高德实时路况数据层（`/api/traffic` 轮询、按段位移、lane 色带） |
+| `lib/traffic-routes.js` | 路况方向 ↔ route 映射（FWD/REV_ROUTE，与后端交叉锁定） |
 | `lib/duration-profiles.js` | 高德耗时预测原始数据（邻近插值） |
-| `functions/` | Pages Functions：`api/availability.js` + `_shared/`（签名/重试/TTL/R2 历史） |
-| `wrangler.toml` | Pages 配置：R2 bucket 绑定 `AVAIL_BUCKET`、vars（窗口/阈值/西山开关） |
-| `.dev.vars` | 本地开发 secret（`SCHOOL_SECRET`，已 gitignore，生产用 Pages 环境变量） |
+| `functions/` | Pages Functions：`api/availability.js`、`api/traffic.js` + `_shared/`（签名/重试/TTL/R2 历史/路况解析/SigV4） |
+| `wrangler.toml` | Pages 配置：R2 bucket 绑定 `AVAIL_BUCKET`、`ENABLE_XISHAN` 开关（TTL/窗口/阈值常量以代码为唯一事实来源） |
+| `.dev.vars` | 本地开发 secret（`SCHOOL_SECRET` 等，已 gitignore，生产用 Pages 环境变量） |
 | `assets/qr-*.png` | 高德导航静态二维码（桌面扫码） |
-| `tests/` | auto-test（`node --test tests/*.test.mjs`，44 项） |
+| `tests/` | auto-test（`node --test tests/*.test.mjs`，130 项） |
 | `docs/ARCHITECTURE.md` | 架构 / 设计原因 / 改动历史（面向 LLM） |
 | `_headers` | Cloudflare Pages 安全头 / 缓存 |
 | `meta.json` | 站点元数据（X-B4 约定） |
