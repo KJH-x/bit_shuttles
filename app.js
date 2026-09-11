@@ -1,4 +1,4 @@
-import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-31";
+import { ROUTES, DURATION_MIN, DURATION_BY_ROUTE, DURATION_PROFILES, scheduleKind, activeTrips, CHECKPOINTS, CAMPUS, ENABLE_XISHAN } from "./schedule-data.js?v=20260910-32";
 import {
   formatClock,
   formatHM,
@@ -14,10 +14,10 @@ import {
   tripLocation,
   campusStopAt,
   etaDiffMin
-} from "./lib/schedule.js?v=20260910-31";
-import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-31";
-import { initInstallGuide } from "./lib/install-guide.js?v=20260910-31";
-import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-31";
+} from "./lib/schedule.js?v=20260910-32";
+import { now, syncClock, toBeijingDateStr } from "./lib/time.js?v=20260910-32";
+import { initInstallGuide } from "./lib/install-guide.js?v=20260910-32";
+import { initQQBrowserGuide } from "./lib/qq-guide.js?v=20260910-32";
 import {
   initAvail,
   setDate as setAvailDate,
@@ -28,9 +28,9 @@ import {
   tripAgeMs,
   availAgeMs,
   fetchHistoryDates
-} from "./lib/availability.js?v=20260910-31";
-import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-31";
-import { initRainbow, refreshRainbowNow, rainbowAvailText, rainbowAgeMs, rainbowTripsForDate } from "./lib/rainbow.js?v=20260910-31";
+} from "./lib/availability.js?v=20260910-32";
+import { initTraffic, refreshTrafficNow, trafficForRoute, realtimeDurMin, markerProgress, laneGradient } from "./lib/traffic.js?v=20260910-32";
+import { initRainbow, refreshRainbowNow, rainbowAvailText, rainbowAgeMs, rainbowTripsForDate } from "./lib/rainbow.js?v=20260910-32";
 import {
   readPref,
   savePref,
@@ -54,7 +54,7 @@ import {
   buildReminderFilename,
   downloadIcs,
   schedulePwaNotify
-} from "./lib/reminder.js?v=20260910-31";
+} from "./lib/reminder.js?v=20260910-32";
 
 const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.id, r.label]));
 const ROUTE_DEST = { a: "中关村", c: "良乡", d: "西山", e: "中关村" };
@@ -304,10 +304,16 @@ function initAvailBridge() {
 }
 
 // 彩虹巴士实车余座（/api/rainbow）：键 `${serviceDate}|${route}|${dep}`，供主屏彩虹卡 + PIDS 使用。
+let rainbowSig = "";
 function initRainbowBridge() {
   initRainbow((data) => {
+    // 瞬时空/降级响应（无缓存、源站抖动）保留上一份数据，避免余票在 -- 与真实值间闪烁
+    if (!data || data.source === "degraded" || !Array.isArray(data.trips)) return;
+    const sig = data.trips.map((t) => `${t.planId}:${t.seatsLeft}`).join(",");
+    if (sig === rainbowSig) return; // 数据未变：不重渲染（避免整列重建闪烁）
+    rainbowSig = sig;
     const map = new Map();
-    for (const t of (data && data.trips) || []) {
+    for (const t of data.trips) {
       if (!t || !t.boardRoute || !t.dep) continue;
       map.set(`${t.serviceDate}|${t.boardRoute}|${t.dep}`, t);
     }
