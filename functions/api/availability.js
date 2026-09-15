@@ -9,6 +9,7 @@
 
 import { host, fetchJson } from "../_shared/school.js";
 import { json, cacheHeaders } from "../_shared/response.js";
+import { tryAcquire } from "../_shared/refresh-lock.js";
 import {
   beijingDateStr,
   depToMs,
@@ -44,6 +45,10 @@ const DEP_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const LIVE_DEFAULT_TTL = 60;
 const META_TTL = 300; // get-list 元数据缓存（封顶 5 分钟）
 const ROUTES_OK = new Set(["a", "c", "d", "e"]);
+const TRIP_LOCK_TTL = 30; // 单趟后台刷新单飞锁时长（秒）
+const BULK_LOCK_TTL = 60; // 整日后台刷新单飞锁时长（秒）
+const MISSING_TTL = 600; // row-missing 终态复查间隔（秒）
+const CLOSED_TTL = 1800; // 已闭窗班次终态 TTL（秒）
 
 function makeSchoolUrls(path, schemeOrder) {
   return host(schemeOrder).map((h) => h + path);
@@ -166,6 +171,13 @@ async function refreshTrip(env, secret, schemeOrder, date, row, nowMs, isToday) 
   return trip;
 }
 
+// row-missing 终态标记：源站列表已无此班次（或座位数据无法成趟）。
+// 写带 fetchedAt 的标记让读取路径进入 missing 分支，
+// 避免「找不到 row → 不写缓存 → fetchedAt 永不推进 → 前端永久 stale」的热循环入口。
+async function writeMissingMarker(bucket, date, route, dep) {
+  await writeTripCache(bucket, date, route, dep, { route, dep, missing: true });
+}
+
 async function getMeta(env, secret, schemeOrder, date, nowMs) {
   const bucket = env.AVAIL_BUCKET;
   const meta = await readMetaCache(bucket, date);
@@ -222,28 +234,62 @@ export async function onRequest({ request, env, waitUntil }) {
     // 无缓存才同步查（一次性），否则 stale-while-revalidate
     const cached = await readTripCache(bucket, date, routeParam, depParam);
     if (cached && cached.route === routeParam && cached.dep === depParam) {
+      // 后台刷新任务（stale / missing 复查共用）：单飞锁保证同班次 30s 内至多一个在跑
+      const tripBackgroundRefresh = async () => {
+        try {
+          const rows = await getMeta(env, secret, schemeOrder, date, nowMs);
+          const row = rows.find((r) => NAME_TO_ROUTE[r.name] === routeParam && r.origin_time === depParam);
+          if (row) {
+            const t = await refreshTrip(env, secret, schemeOrder, date, row, nowMs, isToday);
+            if (!t) await writeMissingMarker(bucket, date, routeParam, depParam);
+          } else {
+            await writeMissingMarker(bucket, date, routeParam, depParam);
+          }
+        } catch (e) {
+          await writeLastFailed(bucket, { date, error: `trip ${routeParam} ${depParam}: ${String(e && e.message || e)}`, attempts: MAX_ATTEMPTS }).catch(() => {});
+        }
+      };
+
       const tMs = depToMs(depParam, date);
       const paid = cached.paid === true;
       const ttl = paid ? paidPhaseTtl(nowMs, tMs).ttl : freeTtl(nowMs, tMs, isToday);
+
+      // row-missing 终态：10 分钟内直接回 missing（不刷源站），超时后带锁低频重查
+      if (cached.missing === true) {
+        const missingFresh = cached.fetchedAt != null && nowMs - cached.fetchedAt < MISSING_TTL * 1000;
+        if (!missingFresh) {
+          if (await tryAcquire(caches.default, `trip/${date}/${routeParam}-${depParam}`, TRIP_LOCK_TTL, nowMs)) {
+            waitUntil(tripBackgroundRefresh());
+          }
+        }
+        return json(
+          { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: MISSING_TTL, source: "missing", dataFetchedAt: typeof cached.fetchedAt === "number" ? cached.fetchedAt : nowMs, trips: [] },
+          200,
+          cacheHeaders(MISSING_TTL)
+        );
+      }
+
+      // 已闭窗班次（paid && ttl==null，过 T-5min）终态：余票不再变化，
+      // 直接返回终态 + 长 TTL，完全跳过后台刷新（此前是 R2 写限流 10058 风暴的主要来源）
+      if (paid && ttl == null) {
+        return json(
+          { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: CLOSED_TTL, source: "closed", dataFetchedAt: nowMs, trips: [applyVisibility(cached, nowMs, date)] },
+          200,
+          cacheHeaders(CLOSED_TTL)
+        );
+      }
+
       const ttlSec = ttl != null && ttl > 0 ? ttl : LIVE_DEFAULT_TTL;
       const fresh = cached.fetchedAt != null && nowMs - cached.fetchedAt < ttlSec * 1000;
       // 售罄班次（paid && available===0）：余票变化敏感，fresh 窗口内也提前后台刷新，
       // 下一请求即可拿到新值（售罄→回补、或有票→售罄 都更快反映）
       const soldOut = cached.paid === true && cached.available === 0;
       const refreshAnyway = soldOut && nowMs - cached.fetchedAt > 20 * 1000;
-      // 过期或售罄需刷新：立刻返回旧值，后台刷新
+      // 过期或售罄需刷新：立刻返回旧值，后台刷新（单飞锁防并发刷新互写 R2 触发 10058 限流）
       if (!fresh || refreshAnyway) {
-        waitUntil(
-          (async () => {
-            try {
-              const rows = await getMeta(env, secret, schemeOrder, date, nowMs);
-              const row = rows.find((r) => NAME_TO_ROUTE[r.name] === routeParam && r.origin_time === depParam);
-              if (row) await refreshTrip(env, secret, schemeOrder, date, row, nowMs, isToday);
-            } catch (e) {
-              await writeLastFailed(bucket, { date, error: `trip ${routeParam} ${depParam}: ${String(e && e.message || e)}`, attempts: MAX_ATTEMPTS }).catch(() => {});
-            }
-          })()
-        );
+        if (await tryAcquire(caches.default, `trip/${date}/${routeParam}-${depParam}`, TRIP_LOCK_TTL, nowMs)) {
+          waitUntil(tripBackgroundRefresh());
+        }
       }
       return json(
         {
@@ -261,19 +307,27 @@ export async function onRequest({ request, env, waitUntil }) {
       );
     }
 
-    // 无缓存：同步查一趟（很快），否则降级
+    // 无缓存：同步查一趟（很快）；同班次已有刷新在跑（锁占用）→ 快速 degraded（15s 后重试，
+    // 届时缓存已就绪），避免多请求同时挂死在源站上被边缘判 504
+    const coldLock = await tryAcquire(caches.default, `trip/${date}/${routeParam}-${depParam}`, TRIP_LOCK_TTL, nowMs);
+    if (!coldLock) {
+      return json({ serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: 15, source: "degraded", trips: [] }, 200, cacheHeaders(15));
+    }
     try {
       const rows = await getMeta(env, secret, schemeOrder, date, nowMs);
       const row = rows.find((r) => NAME_TO_ROUTE[r.name] === routeParam && r.origin_time === depParam);
       if (!row) {
-        return json({ serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: 60, source: "missing", trips: [] }, 200, cacheHeaders(60));
+        await writeMissingMarker(bucket, date, routeParam, depParam);
+        return json({ serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: MISSING_TTL, source: "missing", dataFetchedAt: nowMs, trips: [] }, 200, cacheHeaders(MISSING_TTL));
       }
       const trip = await refreshTrip(env, secret, schemeOrder, date, row, nowMs, isToday);
-      const tMs = depToMs(depParam, date);
-      const paid = trip ? trip.paid === true : false;
-      const ttlSec = trip && trip.ttl != null && trip.ttl > 0 ? trip.ttl : LIVE_DEFAULT_TTL;
+      if (!trip) {
+        await writeMissingMarker(bucket, date, routeParam, depParam);
+        return json({ serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: MISSING_TTL, source: "missing", dataFetchedAt: nowMs, trips: [] }, 200, cacheHeaders(MISSING_TTL));
+      }
+      const ttlSec = trip.ttl != null && trip.ttl > 0 ? trip.ttl : LIVE_DEFAULT_TTL;
       return json(
-        { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: ttlSec, source: "live", dataFetchedAt: nowMs, trips: trip ? [applyVisibility(trip, nowMs, date)] : [] },
+        { serverNow: nowMs, date, route: routeParam, dep: depParam, minTtl: ttlSec, source: "live", dataFetchedAt: nowMs, trips: [applyVisibility(trip, nowMs, date)] },
         200,
         cacheHeaders(ttlSec)
       );
@@ -293,15 +347,19 @@ export async function onRequest({ request, env, waitUntil }) {
     if (isFuture) ttl = futureDayTtl(nowMs, date) || ttl;
     const fresh = live.fetchedAt != null && nowMs - live.fetchedAt < ttl * 1000;
     if (!fresh) {
-      waitUntil(
-        (async () => {
-          try {
-            await refreshAll(env, secret, schemeOrder, date, nowMs, isToday);
-          } catch (e) {
-            await writeLastFailed(bucket, { date, error: `bulk: ${String(e && e.message || e)}`, attempts: MAX_ATTEMPTS }).catch(() => {});
-          }
-        })()
-      );
+      // 单飞锁：同日期 60s 内只放行一次整日刷新（refreshAll = 1 次 get-list + N 次座位查询），
+      // 防止并发 stale 请求造成刷新风暴 + R2 写限流
+      if (await tryAcquire(caches.default, `bulk/${date}`, BULK_LOCK_TTL, nowMs)) {
+        waitUntil(
+          (async () => {
+            try {
+              await refreshAll(env, secret, schemeOrder, date, nowMs, isToday);
+            } catch (e) {
+              await writeLastFailed(bucket, { date, error: `bulk: ${String(e && e.message || e)}`, attempts: MAX_ATTEMPTS }).catch(() => {});
+            }
+          })()
+        );
+      }
     }
     return json(
       { serverNow: nowMs, date, minTtl: ttl, source: fresh ? "cache" : "stale", dataFetchedAt: typeof live.fetchedAt === "number" ? live.fetchedAt : nowMs, traffic: live.traffic || null, scheduleKind: live.scheduleKind || null, trips: live.trips.map((t) => applyVisibility(t, nowMs, date)) },
@@ -310,7 +368,12 @@ export async function onRequest({ request, env, waitUntil }) {
     );
   }
 
-  // 无 live 缓存：同步批量查一次
+  // 无 live 缓存：同步批量查一次；同日期已有刷新在跑（锁占用）→ 快速 degraded（15s 后重试），
+  // 避免多请求同时挂死在源站（此前是 504 的主要来源）
+  const bulkColdLock = await tryAcquire(caches.default, `bulk/${date}`, BULK_LOCK_TTL, nowMs);
+  if (!bulkColdLock) {
+    return json({ serverNow: nowMs, date, minTtl: 15, source: "degraded", traffic: null, scheduleKind: null, trips: [] }, 200, cacheHeaders(15));
+  }
   try {
     const { trips, traffic, mTtl, scheduleKind } = await refreshAll(env, secret, schemeOrder, date, nowMs, isToday);
     return json(

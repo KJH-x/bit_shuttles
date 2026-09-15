@@ -1,12 +1,13 @@
-// 源站签名 + 请求（带重试 3 次与协议回退）。
+// 源站签名 + 请求（带重试 2 次与协议回退，快速失败由调用方处理降级/last-failed）。
 // 签名：apitime = Date.now() 字符串；apitoken = md5(md5(secret + apitime))。
-// 连接性：默认 https 优先、失败回退 http；重试 3 次后放弃（由调用方处理降级/last-failed）。
+// 连接性：默认 https 优先、失败回退 http；同步冷路径最坏 2×2×4s+退避 ≈ 16s，
+// 必须远小于边缘网关超时，否则请求被 504（v1.36：8s×3 → 4s×2）。
 
 import { md5Hex } from "./md5.js";
 
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 400;
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 4000;
 
 export function sign(secret, nowMs = Date.now()) {
   const apitime = String(nowMs);
