@@ -60,7 +60,7 @@ test("fetchWithRetry: https 失败 → 回退 http（协议回退）", async () 
   }
 });
 
-test("fetchWithRetry: 全部失败（重试 3 轮）→ 抛错", async () => {
+test("fetchWithRetry: 全部失败（重试 2 轮）→ 抛错", async () => {
   const saved = globalThis.fetch;
   let n = 0;
   try {
@@ -68,8 +68,8 @@ test("fetchWithRetry: 全部失败（重试 3 轮）→ 抛错", async () => {
       n++;
       throw new Error("down");
     };
-    await assert.rejects(() => fetchWithRetry(host(), { secret: SECRET }), /school unreachable after 3 attempts/);
-    assert.ok(n >= 3, `expected >=3 fetch calls, got ${n}`);
+    await assert.rejects(() => fetchWithRetry(host(), { secret: SECRET }), /school unreachable after 2 attempts/);
+    assert.equal(n, 4, `expected 2 attempts × 2 urls fetch calls, got ${n}`);
   } finally {
     globalThis.fetch = saved;
   }
