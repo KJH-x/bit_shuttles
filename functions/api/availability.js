@@ -144,6 +144,14 @@ async function refreshAll(env, secret, schemeOrder, date, nowMs, isToday) {
   // 整份 TTL：未来日期用「日级 TTL」（1 天 / 1 小时，见 futureDayTtl），今日沿用相位最小 TTL
   let mTtl = minTtl(ttlList(trips)) || LIVE_DEFAULT_TTL;
   if (!isToday) mTtl = futureDayTtl(nowMs, date) || mTtl;
+
+  // 防空污染（与 writeSnapshot 同策略，导出决策函数供单测）：
+  // get-list 成功但座位查询全部失败时 trips=[]，不覆盖已存在的非空 live 缓存，
+  // 避免把好数据擦成 trips:[] 空壳（09-09 空壳事故与 09-16 14:50 擦除的同款成因）
+  const keep = keepExistingLive(await readLiveCache(bucket, date), trips);
+  if (keep) {
+    return { trips: keep.trips, traffic: keep.traffic || traffic, mTtl: keep.minTtl || mTtl, scheduleKind: keep.scheduleKind || scheduleKind };
+  }
   await writeLiveCache(bucket, date, { minTtl: mTtl, traffic, scheduleKind, trips });
 
   if (isToday) {
@@ -156,6 +164,14 @@ async function refreshAll(env, secret, schemeOrder, date, nowMs, isToday) {
 
 function ttlList(trips) {
   return trips.map((t) => (t.ttl == null ? null : t.ttl));
+}
+
+// 空结果保护决策：新 trips 非空 → 覆盖（返回 null）；新 trips 为空且已有非空 live → 保留旧 live；
+// 无可保留的旧 live → 返回 null（照常写空，首次无数据属正常）
+export function keepExistingLive(existingLive, trips) {
+  if (Array.isArray(trips) && trips.length > 0) return null;
+  if (existingLive && Array.isArray(existingLive.trips) && existingLive.trips.length > 0) return existingLive;
+  return null;
 }
 
 // 单趟刷新：源站 get-reserved-seats → 写 trip 缓存，返回该趟数据
